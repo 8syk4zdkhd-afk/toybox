@@ -1174,33 +1174,9 @@ if (systemDark && systemDark.addEventListener) {
 }
 readColors();
 
-// ===================================================================
-// Fit to the whole screen
-// iPhone quirk: in the home-screen app with the see-through status bar (dark mode),
-// iOS can report a screen that's shorter than the real one by the status bar's height.
-// That leaves the tab bar floating too high. Measure it and stretch the app to the
-// real bottom edge, but only when that's actually happening.
-// ===================================================================
+// Which status bar the app was opened with (see-through in dark mode). Shown in the screen check.
 const launchedSeeThrough =
   document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content === 'black-translucent';
-
-function fitToScreen() {
-  const standalone = navigator.standalone === true ||
-    (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
-  let height = '';
-  if (standalone && launchedSeeThrough && window.innerHeight > window.innerWidth) {
-    const probe = document.createElement('div');
-    probe.className = 'safe-probe';
-    document.body.append(probe);
-    const statusBar = parseFloat(getComputedStyle(probe).paddingTop) || 0;
-    probe.remove();
-    const full = window.innerHeight + statusBar;
-    if (statusBar > 0 && full <= screen.height + 2) height = full + 'px';
-  }
-  document.documentElement.style.setProperty('--app-h', height || '100%');
-}
-fitToScreen();
-window.addEventListener('resize', fitToScreen);
 
 // Triple-tap the ToyBox title to show how this phone reports its screen.
 // (Used to fix layout problems on a real iPhone. Tap the card to close it.)
@@ -1230,7 +1206,7 @@ function screenReport() {
     `safe area top ${safe.top} / bottom ${safe.bottom}`,
     `app: ${Math.round(appBox.top)} to ${Math.round(appBox.bottom)}`,
     `tab bar bottom: ${Math.round(bar.bottom)}`,
-    `fix 1 (--app-h): ${getComputedStyle(document.documentElement).getPropertyValue('--app-h') || '-'}`,
+    `page height: ${Math.round(document.documentElement.getBoundingClientRect().height)}`,
   ].join('\n');
 }
 let titleTaps = [];

@@ -114,11 +114,13 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 
 [hidden] { display: none !important; }
 
-/* iOS 26 bug in home-screen apps: the screen is reported short by the status bar's height.
-   Fix 2 (no measuring needed): stretch by the status bar height, but never past the phone's
-   real full height (100lvh). When the screen isn't short, this changes nothing. */
+/* iOS 26 bug in home-screen apps: the screen is reported short by the status bar's height,
+   and nothing gets drawn below that line. iOS gives the app its full screen when the page
+   itself is at least as tall as the phone, so make the page that tall (never taller than the
+   phone's full height, 100lvh). Then the app reaches the real bottom on its own.
+   When the screen isn't short, this changes nothing. */
 @media (display-mode: standalone) {
-  .app { height: max(var(--app-h, 100%), min(100lvh, calc(100% + env(safe-area-inset-top, 0px)))); }
+  html { min-height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px))); }
 }
 
 /* Hidden screen-measurement card (triple-tap the ToyBox title). */
@@ -138,8 +140,6 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   user-select: text;
 }
 
-/* An invisible helper app.js uses to measure the iPhone's status bar height. */
-.safe-probe { position: fixed; top: 0; left: 0; visibility: hidden; pointer-events: none; padding-top: env(safe-area-inset-top, 0px); }
 
 /* The whole app is one phone-sized box (centered on a computer screen). */
 /* Pinned to all four edges of the screen, so it reaches all the way down
@@ -149,7 +149,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   top: 0;
   left: 0;
   right: 0;
-  height: var(--app-h, 100%);   /* app.js stretches this on iPhones that report a short screen */
+  bottom: 0;
   max-width: 480px;
   margin: 0 auto;
   overflow: hidden;
