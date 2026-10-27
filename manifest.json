@@ -9,8 +9,8 @@
   "background_color": "#ece7e1",
   "theme_color": "#ece7e1",
   "icons": [
-    { "src": "icons/toybox-icon-192-v4.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/toybox-icon-512-v4.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/toybox-icon-maskable-512-v4.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "icons/toybox-icon-192-v5.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/toybox-icon-512-v5.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/toybox-icon-maskable-512-v5.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
