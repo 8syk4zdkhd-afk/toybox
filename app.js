@@ -1202,6 +1202,54 @@ function fitToScreen() {
 fitToScreen();
 window.addEventListener('resize', fitToScreen);
 
+// Triple-tap the ToyBox title to show how this phone reports its screen.
+// (Used to fix layout problems on a real iPhone. Tap the card to close it.)
+function screenReport() {
+  const measure = (css) => {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;top:0;left:0;visibility:hidden;pointer-events:none;${css}`;
+    document.body.append(el);
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const result = { h: Math.round(r.height), top: cs.paddingTop, bottom: cs.paddingBottom };
+    el.remove(); // read everything first: a removed element reports nothing
+    return result;
+  };
+  const safe = measure('padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)');
+  const vv = window.visualViewport;
+  const appBox = app.getBoundingClientRect();
+  const bar = $('tabbar').getBoundingClientRect();
+  return [
+    `ToyBox screen check`,
+    `installed app: ${navigator.standalone === true || matchMedia('(display-mode: standalone)').matches}`,
+    `status bar at launch: ${launchedSeeThrough ? 'see-through' : 'normal'}`,
+    `screen: ${screen.width} x ${screen.height}`,
+    `inner: ${innerWidth} x ${innerHeight}`,
+    `visual viewport: ${vv ? Math.round(vv.height) : '-'}`,
+    `100vh ${measure('height:100vh').h} / dvh ${measure('height:100dvh').h} / svh ${measure('height:100svh').h} / lvh ${measure('height:100lvh').h}`,
+    `safe area top ${safe.top} / bottom ${safe.bottom}`,
+    `app: ${Math.round(appBox.top)} to ${Math.round(appBox.bottom)}`,
+    `tab bar bottom: ${Math.round(bar.bottom)}`,
+    `fix 1 (--app-h): ${getComputedStyle(document.documentElement).getPropertyValue('--app-h') || '-'}`,
+  ].join('\n');
+}
+let titleTaps = [];
+document.querySelector('.brand').addEventListener('click', () => {
+  const now = Date.now();
+  titleTaps = titleTaps.filter((t) => now - t < 800).concat(now);
+  if (titleTaps.length < 3) return;
+  titleTaps = [];
+  let card = document.getElementById('diag');
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'diag';
+    card.className = 'diag';
+    card.addEventListener('click', () => card.remove());
+    app.append(card);
+  }
+  card.textContent = screenReport();
+});
+
 // ===================================================================
 // 13. Start
 // ===================================================================

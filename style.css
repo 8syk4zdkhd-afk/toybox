@@ -114,6 +114,30 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 
 [hidden] { display: none !important; }
 
+/* iOS 26 bug in home-screen apps: the screen is reported short by the status bar's height.
+   Fix 2 (no measuring needed): stretch by the status bar height, but never past the phone's
+   real full height (100lvh). When the screen isn't short, this changes nothing. */
+@media (display-mode: standalone) {
+  .app { height: max(var(--app-h, 100%), min(100lvh, calc(100% + env(safe-area-inset-top, 0px)))); }
+}
+
+/* Hidden screen-measurement card (triple-tap the ToyBox title). */
+.diag {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: calc(var(--safe-top) + 64px);
+  z-index: 50;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--ink);
+  color: var(--paper-hi);
+  font: 13px/1.45 ui-monospace, Menlo, monospace;
+  white-space: pre-wrap;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* An invisible helper app.js uses to measure the iPhone's status bar height. */
 .safe-probe { position: fixed; top: 0; left: 0; visibility: hidden; pointer-events: none; padding-top: env(safe-area-inset-top, 0px); }
 
