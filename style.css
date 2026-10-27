@@ -42,7 +42,7 @@
 
   --safe-top: max(env(safe-area-inset-top), 16px);
   --safe-bottom: max(env(safe-area-inset-bottom), 10px);
-  --dock-h: 62px;   /* height of the tab bar, and the size of the round + */
+  --dock-h: 62px;   /* the size of the round +, and the height of the mini player */
 
   /* Springy movement (app.js swaps in a real spring curve where the phone supports it). */
   --spring: cubic-bezier(0.34, 1.3, 0.64, 1);        --spring-ms: 420ms;
@@ -239,7 +239,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 }
 
 /* ============ Library ============ */
-#libraryScroll { padding: 4px 0 calc(var(--safe-bottom) + 170px); }
+#libraryScroll { padding: 4px 0 calc(var(--safe-bottom) + 100px); }
 
 .cards {
   display: grid;
@@ -330,7 +330,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 .welcome-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
 /* ============ Project ============ */
-#projectScroll { padding-bottom: calc(var(--safe-bottom) + 170px); }
+#projectScroll { padding-bottom: calc(var(--safe-bottom) + 100px); }
 
 .hero {
   position: relative;
@@ -602,8 +602,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 .dial-hint { color: var(--ink-soft); }
 .tape-switch[aria-pressed="true"] { background: var(--ink); color: var(--beige); }
 
-/* ============ Mini player and tab bar ============ */
-/* The dock holds the tab bar and the round + beside it. */
+/* ============ The dock: mini player and the round + ============ */
+/* The dock sits at the bottom: what's playing on the left, the round + on the right. */
 .dock {
   position: absolute;
   left: 14px;
@@ -614,50 +614,11 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   margin: 0 auto;
   display: flex;
   align-items: flex-end;
+  justify-content: flex-end;
   gap: 10px;
+  pointer-events: none; /* only its buttons catch taps, not the empty space */
 }
-.tabbar {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  gap: 4px;
-  height: var(--dock-h);
-  padding: 5px;
-  border-radius: 999px;
-  background: var(--bar-bg);
-  transform-origin: 50% 100%;
-}
-/* The light pill behind the tab you're on. It glides to the tab you tap. */
-.tab-glider {
-  position: absolute;
-  top: 5px;
-  bottom: 5px;
-  left: 0;
-  width: 0;
-  border-radius: 999px;
-  background: var(--bar-sel-bg);
-  transition: transform var(--spring-ms) var(--spring), width var(--spring-ms) var(--spring);
-}
-.tab-glider.still { transition: none; }
-.tab {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--bar-fg);
-  transition: color 0.25s ease;
-}
-.tab[aria-current="page"] { color: var(--bar-sel-fg); }
-
+.dock > * { pointer-events: auto; }
 /* The round +. Pressed, it puffs up and lights; open, it turns into an ×. */
 .plus-btn {
   flex: none;
@@ -679,7 +640,6 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   stroke-linecap: round;
   transition: transform var(--spring-bouncy-ms) var(--spring-bouncy);
 }
-.dock.open .tabbar { visibility: hidden; } /* hidden under the tools (and can't be tapped) */
 .dock.open .plus-btn { background: var(--tile-bg); }
 .dock.open .plus-btn svg { transform: rotate(45deg); }
 .plus-btn:active {
@@ -689,7 +649,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   transition: background 0s, color 0s, transform 0.12s ease-out;
 }
 
-/* The tools: a grid of big buttons that grows out of the tab bar. */
+/* The tools: a grid of big buttons that grows out of the + (or out of the mini player). */
 .tools {
   position: absolute;
   left: 0;
@@ -700,7 +660,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   border-radius: 28px;
   background: var(--bar-bg);
   box-shadow: inset 0 0 0 1px var(--tools-edge);
-  transform-origin: 50% 100%;
+  transform-origin: 0 0;
 }
 .tools-grid {
   display: grid;
@@ -744,12 +704,13 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Pressing a tool lights it up, and it stays lit while the tools melt away. */
-.tool:active .tool-tile, .tool.picked .tool-tile {
+/* The screen you're on is lit. Pressing a tool lights it too, and it stays lit while the tools melt away. */
+.tool[aria-current="page"] .tool-tile, .tool:active .tool-tile, .tool.picked .tool-tile {
   background: var(--bar-sel-bg);
   color: var(--bar-sel-fg);
   transition: none;
 }
+.tool[aria-current="page"] .tool-label { color: var(--tile-fg); }
 .tool:active .tool-tile { transform: scale(0.94); }
 .tool.off .tool-tile, .tool.off .tool-label { opacity: 0.38; }
 
@@ -762,19 +723,17 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 }
 
 .mini {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: calc(var(--safe-bottom) + 84px);
-  z-index: 9;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 60px;
-  padding: 0 10px 0 6px;
-  border-radius: 20px;
-  background: var(--paper-hi);
-  box-shadow: inset 0 0 0 1px var(--ink-line);
+  height: var(--dock-h);
+  padding: 0 9px 0 8px;
+  border-radius: 999px;
+  background: var(--bar-bg);
+  color: var(--tile-fg);
+  transform-origin: 50% 100%;
 }
 .mini-open {
   display: flex;
@@ -786,21 +745,21 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   padding-left: 8px;
   text-align: left;
 }
-.mini-reel { width: 30px; height: 30px; color: var(--ink); }
+.mini-reel { width: 30px; height: 30px; color: var(--tile-fg); }
 .mini.is-playing .mini-reel { animation: spin 2.4s linear infinite; }
-.mini { transition: opacity 0.2s ease; }
-.app.tools-open .mini { opacity: 0; pointer-events: none; }
+.app.tools-open .mini { visibility: hidden; } /* under the tools, and can't be tapped */
 .mini-text { display: flex; flex-direction: column; min-width: 0; }
 .mini-title { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mini-sub { font-size: 12.5px; color: var(--ink-soft); }
+.mini-sub { font-size: 12.5px; color: var(--tile-label); }
 .mini-play {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  flex: none;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: var(--ink);
-  color: var(--paper-hi);
+  background: var(--bar-sel-bg);
+  color: var(--bar-sel-fg);
 }
 
 /* Which floating pieces show on which screen */
@@ -844,10 +803,10 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 .sheet-actions button[aria-checked="true"]::after { content: "  \2713"; }
 .sheet-cancel { width: 100%; margin-top: 8px; border-radius: 16px; border-top: 0; font-weight: 600; }
 
-/* Little messages float just above the tab bar, so they never cover a title. */
+/* Little messages float just above the dock, so they never cover a title. */
 .toast {
   position: absolute;
-  bottom: calc(var(--safe-bottom) + 156px);
+  bottom: calc(var(--safe-bottom) + 84px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 40;
@@ -864,7 +823,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 }
 .app[data-screen="player"] .toast { bottom: calc(var(--safe-bottom) + 24px); }
 /* With the tools open, messages float above them instead. */
-.app.tools-open .toast { bottom: calc(var(--safe-bottom) + 214px); }
+.app.tools-open .toast { bottom: calc(var(--safe-bottom) + 20px + var(--tools-h, 290px)); }
 
 /* ============ Movement (only when you do something) ============ */
 .screen.enter-right { animation: enter-right 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -876,7 +835,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
   .screen.enter-right, .screen.enter-up, .sheet-backdrop:not([hidden]) .action-sheet { animation: none; }
   .is-playing .reel-spin, .mini.is-playing .mini-reel { animation: none; }
-  .tab-glider, .plus-btn, .plus-btn svg, .tool-tile { transition-duration: 0.01s !important; }
+  .plus-btn, .plus-btn svg, .tool-tile { transition-duration: 0.01s !important; }
   .plus-btn:active, .tool:active .tool-tile { transform: none; }
 }
 

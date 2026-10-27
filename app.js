@@ -5,7 +5,7 @@
    2. The app's memory          9. The player
    3. Small helpers            10. Dot display, reels and dials
    4. Moving between screens   11. Headphone and lock-screen controls
-      (4b. tab pill and + tools)
+      (4b. the dock and the + tools)
    5. Drawing the library      12. Recording
    6. Bringing in songs        13. Start
    7. Projects
@@ -184,12 +184,6 @@ function show(name, motion) {
     el.classList.add(motion);
   }
 
-  const tab = name === 'project' ? 'library' : name;
-  document.querySelectorAll('.tab').forEach((t) => {
-    if (t.dataset.tab === tab) t.setAttribute('aria-current', 'page');
-    else t.removeAttribute('aria-current');
-  });
-  placeGlider(true);
   if (name === 'player') closeTools(true); // the player covers the dock
 
   // Every screen is light, so the clock and battery at the top stay dark.
@@ -201,15 +195,6 @@ function show(name, motion) {
   renderMini();
 }
 
-document.querySelectorAll('.tab').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    const to = tab.dataset.tab;
-    if (to === 'library') { renderLibrary(); show('library'); }
-    if (to === 'record') { renderRecordTarget(); show('record'); }
-    if (to === 'player') { renderPlayer(); show('player', 'enter-up'); }
-  });
-});
-
 $('backBtn').addEventListener('click', () => { renderLibrary(); show('library'); });
 $('closePlayer').addEventListener('click', () => {
   const back = screenBeforePlayer === 'player' ? 'library' : screenBeforePlayer;
@@ -218,11 +203,13 @@ $('closePlayer').addEventListener('click', () => {
 });
 
 // ===================================================================
-// 4b. The dock: the gliding tab pill, and the + tools
-// Tap + and the tab bar melts into a grid of big tool buttons
-// (it goes blurry, stretches into the grid's shape, then comes into focus
-// with a little springy settle). The + turns into an ×.
-// Tap ×, a tool, or anywhere else, and the grid melts back into the tab bar.
+// 4b. The dock and the + tools
+// At the bottom: what's playing, and a round +.
+// Tap + and a grid of big buttons melts out of it: your projects, the
+// recorder, the player, and the tools. (It goes blurry, stretches into the
+// grid's shape, then comes into focus with a little springy settle.)
+// The + turns into an ×. Tap ×, a button, or anywhere else, and it melts back.
+// If something's playing, the grid grows out of the mini player instead.
 // ===================================================================
 
 // A spring, turned into a timing curve the browser can play.
@@ -250,29 +237,14 @@ if (canSpring) {
 }
 const calmMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-// ---------- The light pill that glides between tabs ----------
-const tabbar = $('tabbar');
-const glider = tabbar.querySelector('.tab-glider');
-let gliderPlaced = false;
-function placeGlider(animate) {
-  const tab = tabbar.querySelector('.tab[aria-current="page"]');
-  if (!tab || !tabbar.offsetWidth) return; // the tab bar is hidden (in the player)
-  const still = !animate || !gliderPlaced;
-  glider.classList.toggle('still', still);
-  glider.style.width = tab.offsetWidth + 'px';
-  glider.style.transform = `translateX(${tab.offsetLeft}px)`;
-  if (still) { void glider.offsetWidth; glider.classList.remove('still'); }
-  gliderPlaced = true;
-}
-window.addEventListener('resize', () => placeGlider(false));
-
-// ---------- The + tools ----------
 const dock = $('dock');
 const tools = $('tools');
 const plusBtn = $('plusBtn');
+const mini = $('mini');
 let toolsOpen = false;
 let toolsTurn = 0;     // goes up on every open/close, so an old animation finishing late is ignored
 let toolMotion = [];   // the animations playing right now
+let toolsFrom = null;  // what the grid grew out of: the mini player, or null for the +
 
 function animateEl(el, frames, options) {
   const a = el.animate(frames, options);
@@ -284,20 +256,30 @@ function stopToolMotion() {
   toolMotion = [];
 }
 
-// The tab bar's shape, described from the grid's point of view:
-// how much to squash the grid so it sits exactly where the tab bar is.
-function barShape() {
-  const bar = tabbar.getBoundingClientRect();
+// Where the grid starts from (and shrinks back into): the mini player if it's showing,
+// otherwise a little circle the size of the +, right beside it.
+// Described from the grid's point of view: how to move and squash it to sit exactly there.
+function startShape(from) {
   const box = tools.getBoundingClientRect();
-  const sx = bar.width / box.width;
-  const sy = bar.height / box.height;
-  const r = bar.height / 2;
+  let src;
+  if (from) {
+    src = from.getBoundingClientRect();
+  } else {
+    const size = plusBtn.getBoundingClientRect().height;
+    src = { left: box.right - size, top: box.bottom - size, width: size, height: size };
+  }
+  const sx = src.width / box.width;
+  const sy = src.height / box.height;
+  const r = src.height / 2;
   return {
-    small: `scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`,
-    smallRadius: `${(r / sx).toFixed(2)}px / ${(r / sy).toFixed(2)}px`, // stays a pill while squashed
+    small: `translate(${(src.left - box.left).toFixed(2)}px, ${(src.top - box.top).toFixed(2)}px) scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`,
+    smallRadius: `${(r / sx).toFixed(2)}px / ${(r / sy).toFixed(2)}px`, // stays round while squashed
     radius: getComputedStyle(tools).borderTopLeftRadius,
   };
 }
+
+// Which of the three places you're on (it's lit in the grid).
+const placeOf = (screen) => (screen === 'project' ? 'library' : screen);
 
 // Some tools change a little depending on where you are.
 function toolsContext() {
@@ -315,13 +297,18 @@ function toolsContext() {
 
 function renderTools() {
   const c = toolsContext();
+  const place = placeOf(app.dataset.screen);
   const set = (name, label, off) => {
     const b = tools.querySelector(`[data-tool="${name}"]`);
-    if (label) b.querySelector('.tool-label').textContent = label;
+    b.querySelector('.tool-label').textContent = label;
     b.classList.toggle('off', !!off);
-    b.setAttribute('aria-label', label || b.querySelector('.tool-label').textContent);
+    b.setAttribute('aria-label', label);
+    if (name === place) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
   };
+  set('library', 'Projects');
   set('record', recorder ? 'Stop' : 'Record');
+  set('player', 'Player');
   set('import', 'Import');
   set('project', 'New project');
   set('shuffle', 'Shuffle', c.songs.length === 0);
@@ -338,35 +325,39 @@ function openTools() {
   toolsTurn++;
   stopToolMotion();
   renderTools();
+  toolsFrom = mini.offsetWidth ? mini : null;
   tools.hidden = false;
+  app.style.setProperty('--tools-h', tools.offsetHeight + 'px'); // so messages float above the grid
   dock.classList.add('open');
   app.classList.add('tools-open');
   $('toolsCatcher').hidden = false;
   plusBtn.setAttribute('aria-expanded', 'true');
-  plusBtn.setAttribute('aria-label', 'Close tools');
+  plusBtn.setAttribute('aria-label', 'Close');
   tick();
 
   if (calmMotion()) {
     animateEl(tools, [{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-out' });
-  } else {
-    const shape = barShape();
-    // 1. The tab bar goes blurry and fades, stretching up as it goes...
-    animateEl(tabbar, [
+    return;
+  }
+  const shape = startShape(toolsFrom);
+  // 1. The mini player (if it's there) goes blurry and fades, stretching up as it goes...
+  if (toolsFrom) {
+    animateEl(toolsFrom, [
       { filter: 'blur(0px)', opacity: 1, transform: 'none', visibility: 'visible' },
       { filter: 'blur(10px)', opacity: 0, transform: 'scale(1, 1.6)', visibility: 'visible' },
     ], { duration: 170, easing: 'ease-in' });
-    // 2. ...while the grid grows out of the tab bar's exact shape, with a springy settle...
-    animateEl(tools, [
-      { transform: shape.small, borderRadius: shape.smallRadius },
-      { transform: 'none', borderRadius: shape.radius },
-    ], { duration: SPRING.soft.ms, easing: SPRING.soft.easing });
-    // 3. ...starting blurry and coming into focus.
-    animateEl(tools, [
-      { filter: 'blur(14px)', opacity: 0 },
-      { filter: 'blur(10px)', opacity: 1, offset: 0.4 },
-      { filter: 'blur(0px)', opacity: 1 },
-    ], { duration: 320, easing: 'ease-out' });
   }
+  // 2. ...while the grid grows out of it (or out of the +), with a springy settle...
+  animateEl(tools, [
+    { transform: shape.small, borderRadius: shape.smallRadius },
+    { transform: 'none', borderRadius: shape.radius },
+  ], { duration: SPRING.soft.ms, easing: SPRING.soft.easing });
+  // 3. ...starting blurry and coming into focus.
+  animateEl(tools, [
+    { filter: 'blur(14px)', opacity: 0 },
+    { filter: 'blur(10px)', opacity: 1, offset: 0.4 },
+    { filter: 'blur(0px)', opacity: 1 },
+  ], { duration: 320, easing: 'ease-out' });
 }
 
 function closeTools(instant) {
@@ -379,7 +370,7 @@ function closeTools(instant) {
   app.classList.remove('tools-open');
   $('toolsCatcher').hidden = true;
   plusBtn.setAttribute('aria-expanded', 'false');
-  plusBtn.setAttribute('aria-label', 'Tools');
+  plusBtn.setAttribute('aria-label', 'Open projects, recorder, player and tools');
   if (hadFocus) plusBtn.focus({ preventScroll: true });
   const finish = () => { if (turn === toolsTurn) { tools.hidden = true; stopToolMotion(); } };
 
@@ -388,8 +379,11 @@ function closeTools(instant) {
     animateEl(tools, [{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: 'forwards' }).finished.then(finish, () => {});
     return;
   }
-  const shape = barShape();
-  // 1. The grid blurs and squeezes back down into the tab bar's shape...
+  // Shrink back into the mini player if it's still showing (it may have just appeared,
+  // or gone away because you opened another screen); otherwise into the +.
+  const into = mini.offsetWidth ? mini : null;
+  const shape = startShape(into);
+  // 1. The grid blurs and squeezes back down...
   const squeeze = animateEl(tools, [
     { transform: 'none', borderRadius: shape.radius },
     { transform: shape.small, borderRadius: shape.smallRadius },
@@ -399,22 +393,24 @@ function closeTools(instant) {
     { filter: 'blur(10px)', opacity: 1, offset: 0.5 },
     { filter: 'blur(14px)', opacity: 0 },
   ], { duration: 280, easing: 'ease-in', fill: 'forwards' });
-  // 2. ...and the tab bar comes back into focus where it lands.
-  animateEl(tabbar, [
-    { filter: 'blur(10px)', opacity: 0 },
-    { filter: 'blur(0px)', opacity: 1 },
-  ], { duration: 220, delay: 150, easing: 'ease-out', fill: 'backwards' });
-  animateEl(tabbar, [
-    { transform: 'scale(1, 1.6)' },
-    { transform: 'none' },
-  ], { duration: SPRING.soft.ms, delay: 150, easing: SPRING.soft.easing, fill: 'backwards' });
+  // 2. ...and the mini player comes back into focus where it lands.
+  if (into) {
+    animateEl(into, [
+      { filter: 'blur(10px)', opacity: 0 },
+      { filter: 'blur(0px)', opacity: 1 },
+    ], { duration: 220, delay: 150, easing: 'ease-out', fill: 'backwards' });
+    animateEl(into, [
+      { transform: 'scale(1, 1.6)' },
+      { transform: 'none' },
+    ], { duration: SPRING.soft.ms, delay: 150, easing: SPRING.soft.easing, fill: 'backwards' });
+  }
   squeeze.finished.then(finish, () => {});
 }
 
 plusBtn.addEventListener('click', (e) => {
   if (toolsOpen) { closeTools(); return; }
   openTools();
-  // Opened with the keyboard? Put it on the first tool.
+  // Opened with the keyboard? Put it on the first button.
   if (e.detail === 0) tools.querySelector('.tool').focus({ preventScroll: true });
 });
 $('toolsCatcher').addEventListener('click', () => closeTools());
@@ -422,11 +418,16 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && toolsOpe
 // Lets iPhones show the "pressed" look while your finger is down.
 document.addEventListener('touchstart', () => {}, { passive: true });
 
-// What each tool does. Things that open something new wait a moment,
+// What each button does. Things that open something new on top wait a moment,
 // so the grid has melted away first. Things that need your tap
 // (picking files, the microphone, sharing) start right away.
 const later = (run) => setTimeout(run, calmMotion() ? 0 : 230);
 const TOOL_JOBS = {
+  library() {
+    if (app.dataset.screen === 'library') return;
+    renderLibrary();
+    show('library');
+  },
   record() {
     const c = toolsContext();
     if (recorder) { stopRecording(); return; }
@@ -434,6 +435,10 @@ const TOOL_JOBS = {
     renderRecordTarget();
     show('record');
     startRecording();
+  },
+  player() {
+    renderPlayer();
+    show('player', 'enter-up');
   },
   import() { pickSongs(toolsContext().here); },
   project() { later(newProject); },
@@ -471,8 +476,11 @@ tools.addEventListener('click', (e) => {
   if (!button) return;
   button.classList.add('picked');
   tick();
-  closeTools();
-  TOOL_JOBS[button.dataset.tool]();
+  try {
+    TOOL_JOBS[button.dataset.tool]();
+  } finally {
+    closeTools(); // after the job, so it melts into whatever is showing now
+  }
 });
 
 // ===================================================================
@@ -571,7 +579,6 @@ function songRow(track, list) {
 
 function renderMini() {
   const track = trackById(nowId);
-  const mini = $('mini');
   const where = app.dataset.screen;
   mini.hidden = !track || (where !== 'library' && where !== 'project');
   if (!track) return;
@@ -1661,7 +1668,7 @@ function screenReport() {
   const safe = measure('padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)');
   const vv = window.visualViewport;
   const appBox = app.getBoundingClientRect();
-  const bar = $('tabbar').getBoundingClientRect();
+  const bar = $('dock').getBoundingClientRect();
   return [
     `ToyBox screen check`,
     `installed app: ${navigator.standalone === true || matchMedia('(display-mode: standalone)').matches}`,
@@ -1672,7 +1679,7 @@ function screenReport() {
     `100vh ${measure('height:100vh').h} / dvh ${measure('height:100dvh').h} / svh ${measure('height:100svh').h} / lvh ${measure('height:100lvh').h}`,
     `safe area top ${safe.top} / bottom ${safe.bottom}`,
     `app: ${Math.round(appBox.top)} to ${Math.round(appBox.bottom)}`,
-    `tab bar bottom: ${Math.round(bar.bottom)}`,
+    `dock bottom: ${Math.round(bar.bottom)}`,
     `page height: ${Math.round(document.documentElement.getBoundingClientRect().height)}`,
   ].join('\n');
 }
