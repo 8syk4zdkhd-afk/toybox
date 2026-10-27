@@ -87,7 +87,7 @@ const songsIn = (projectId) => tracks
 
 async function save() {
   try {
-    await Store.saveLibrary(projects, tracks, { looseCover: LOOSE.cover });
+    await Store.saveLibrary(projects, tracks, { looseCover: LOOSE.cover, looseName: LOOSE.name });
   } catch (e) {
     toast('Couldn’t save. Is your phone full?');
   }
@@ -434,38 +434,37 @@ async function newProject() {
 }
 
 function projectMenu(project) {
-  const coverActions = [
+  const actions = [
+    { label: 'Import songs', run: () => pickSongs(project.id) },
+    { label: 'Rename', run: () => renameProject(project) },
     { label: 'Use a photo as cover', run: () => pickCover(project) },
     { label: 'New painted cover', run: () => newPaintedCover(project) },
   ];
-  if (!project.id) {
-    openSheet(project.name, [{ label: 'Import songs', run: () => pickSongs(null) }, ...coverActions]);
-    return;
-  }
-  openSheet(project.name, [
-    { label: 'Import songs', run: () => pickSongs(project.id) },
-    { label: 'Rename', run: () => renameProject(project) },
-    ...coverActions,
-    { label: 'Delete project', danger: true, run: () => deleteProject(project) },
-  ]);
+  // "Loose ideas" can be renamed and get a new cover, but can't be deleted.
+  if (project.id) actions.push({ label: 'Delete project', danger: true, run: () => deleteProject(project) });
+  openSheet(project.name, actions);
 }
 $('projectMore').addEventListener('click', () => projectMenu(projectOf(openProjectId)));
 
-// Tap the big cover (or "Edit cover") on a project's page to change it.
-function coverMenu(project) {
-  openSheet('Cover art', [
-    { label: 'Use a photo', run: () => pickCover(project) },
+// Tap the big cover (or "Edit") on a project's page to change its name or cover.
+function editMenu(project) {
+  openSheet(project.name, [
+    { label: 'Rename', run: () => renameProject(project) },
+    { label: 'Use a photo as cover', run: () => pickCover(project) },
     { label: 'New painted cover', run: () => newPaintedCover(project) },
   ]);
 }
-$('projectHero').addEventListener('click', () => coverMenu(projectOf(openProjectId)));
+$('projectHero').addEventListener('click', () => editMenu(projectOf(openProjectId)));
 
 async function renameProject(project) {
-  const name = (prompt('Rename project', project.name) || '').trim();
-  if (!name) return;
-  project.name = name;
+  const name = (prompt('New name', project.name) || '').trim();
+  if (!name || name === project.name) return;
+  project.name = name; // for "Loose ideas" this is saved with the app's settings
   await save();
   refreshLists();
+  renderRecordTarget();
+  if (project.id === nowPlayingProjectId()) { renderPlayer(); updateMediaSession(); }
+  toast(`Renamed to ${name}`);
 }
 
 let coverTarget = null;
@@ -536,7 +535,7 @@ function nowPlayingProjectId() {
 }
 
 async function deleteProject(project) {
-  if (!confirm(`Delete "${project.name}"? Its songs move to Loose ideas.`)) return;
+  if (!confirm(`Delete "${project.name}"? Its songs move to ${LOOSE.name}.`)) return;
   for (const t of tracks) if (t.projectId === project.id) t.projectId = null;
   if (project.cover && project.cover.photo) await Store.deleteFile(project.cover.photo);
   projects = projects.filter((p) => p.id !== project.id);
@@ -1133,6 +1132,7 @@ async function start() {
     projects = data.projects;
     tracks = data.tracks;
     if (data.settings && data.settings.looseCover) LOOSE.cover = data.settings.looseCover;
+    if (data.settings && data.settings.looseName) LOOSE.name = data.settings.looseName;
   } catch (e) {
     toast('ToyBox couldn’t open its storage');
   }
