@@ -788,9 +788,9 @@ function drawDots() {
     const lit = track && t >= 0 && t <= total ? Math.max(1, Math.round(level * rows)) : 0;
     for (let row = 0; row < rows; row++) {
       const on = Math.abs(row - midRow) * 2 < lit;
-      if (c === mid && track) dotsCtx.fillStyle = '#ff3b30';
-      else if (on) dotsCtx.fillStyle = c < mid ? '#121212' : 'rgba(18,18,18,0.5)';
-      else dotsCtx.fillStyle = 'rgba(18,18,18,0.13)';
+      if (c === mid && track) dotsCtx.fillStyle = colors.red;
+      else if (on) dotsCtx.fillStyle = c < mid ? colors.dotOn : colors.dotAhead;
+      else dotsCtx.fillStyle = colors.dotOff;
       dotsCtx.beginPath();
       dotsCtx.arc(left + c * gap, topY + row * gap, r, 0, Math.PI * 2);
       dotsCtx.fill();
@@ -986,7 +986,7 @@ function drawGrill(level) {
   const W = grill.width, H = grill.height, cx = W / 2, cy = H / 2;
   const R = Math.min(W, H) / 2;
   grillCtx.clearRect(0, 0, W, H);
-  grillCtx.fillStyle = 'rgba(0,0,0,0.06)';
+  grillCtx.fillStyle = colors.grillBg;
   grillCtx.beginPath(); grillCtx.arc(cx, cy, R, 0, Math.PI * 2); grillCtx.fill();
   const rings = 8;
   const spacing = (R * 0.86) / rings;
@@ -994,7 +994,7 @@ function drawGrill(level) {
     const count = ring === 0 ? 1 : ring * 6;
     const lv = recorder ? levelHistory[Math.min(levelHistory.length - 1, ring)] : 0;
     const size = spacing * (0.26 + lv * 0.32);
-    grillCtx.fillStyle = '#121212';
+    grillCtx.fillStyle = colors.grillDot;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + (ring % 2 ? Math.PI / count : 0);
       grillCtx.beginPath();
@@ -1121,6 +1121,57 @@ $('recordTarget').addEventListener('click', () => {
     run: () => { recordTargetId = p.id; renderRecordTarget(); },
   })));
 });
+
+// ===================================================================
+// Light and dark mode
+// The choice is remembered on this phone. "Match my phone" follows the
+// phone's own Light/Dark setting, even when it changes at sunset.
+// ===================================================================
+let colors = {};
+function readColors() {
+  const css = getComputedStyle(document.documentElement);
+  const get = (name) => css.getPropertyValue(name).trim();
+  colors = {
+    red: get('--red'),
+    dotOn: get('--dot-on'), dotAhead: get('--dot-ahead'), dotOff: get('--dot-off'),
+    grillDot: get('--grill-dot'), grillBg: get('--grill-bg'),
+  };
+}
+
+const systemDark = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+function themeChoice() {
+  try { return localStorage.getItem('toybox-theme') || 'light'; } catch (e) { return 'light'; }
+}
+
+function applyTheme() {
+  const choice = themeChoice();
+  const dark = choice === 'dark' || (choice === 'auto' && systemDark && systemDark.matches);
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  document.querySelector('meta[name="theme-color"]').content = dark ? '#141312' : '#ece7e1';
+  document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = dark ? 'black-translucent' : 'default';
+  readColors();
+  drawDots();
+  drawGrill(0);
+}
+
+function setTheme(choice) {
+  try { localStorage.setItem('toybox-theme', choice); } catch (e) { /* can't remember it; still switch now */ }
+  applyTheme();
+  tick();
+}
+
+$('themeBtn').addEventListener('click', () => {
+  const choice = themeChoice();
+  openSheet('Appearance', [
+    { label: 'Light', checked: choice === 'light', run: () => setTheme('light') },
+    { label: 'Dark', checked: choice === 'dark', run: () => setTheme('dark') },
+    { label: 'Match my phone', checked: choice === 'auto', run: () => setTheme('auto') },
+  ]);
+});
+if (systemDark && systemDark.addEventListener) {
+  systemDark.addEventListener('change', () => { if (themeChoice() === 'auto') applyTheme(); });
+}
+readColors();
 
 // ===================================================================
 // 13. Start

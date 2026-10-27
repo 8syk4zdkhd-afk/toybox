@@ -17,10 +17,55 @@
   --ink-line: rgba(18, 18, 18, 0.1);
   --red: #ff3b30;
 
+  /* Colors with a special job (dark mode swaps these, below) */
+  --on-cover: #f6f2ed;             /* the giant name printed on covers */
+  --faint: rgba(18, 18, 18, 0.42);
+  --current-bg: #121212;  --current-fg: #ffd21f;   /* the song that's playing */
+  --rec-bg: #ffd21f;      --rec-ink: #121212;      /* the recorder */
+  --rec-faint: rgba(18, 18, 18, 0.42);
+  --rec-soft: rgba(18, 18, 18, 0.55);
+  --rec-ring: #121212;    --rec-btn: #ffd21f;
+  --grill-dot: #121212;   --grill-bg: rgba(0, 0, 0, 0.06);
+  --reel-plate: #e6ded5;  --reel-tape: #3b332e;   --reel-ring: #f6f2ed;
+  --reel-arm: #121212;    --reel-key: #f6f2ed;
+  --knob-center: #f6f2ed;
+  --dot-on: #121212;      --dot-ahead: rgba(18, 18, 18, 0.5);  --dot-off: rgba(18, 18, 18, 0.13);
+  --bar-bg: #121212;      --bar-fg: rgba(246, 242, 237, 0.55);
+  --bar-sel-bg: #f6f2ed;  --bar-sel-fg: #121212;
+  --backdrop: rgba(18, 18, 18, 0.32);
+  --frame: #cbc1b6;
+
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
 
   --safe-top: max(env(safe-area-inset-top), 16px);
   --safe-bottom: max(env(safe-area-inset-bottom), 10px);
+}
+
+/* Dark mode: warm near-black, light controls, and a dark recorder with yellow details. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #141312;
+  --paper-hi: #211f1d;
+  --beige: #24201d;
+  --beige-deep: #302b27;
+  --ink: #f2ede6;
+  --ink-soft: rgba(242, 237, 230, 0.55);
+  --ink-line: rgba(242, 237, 230, 0.12);
+  --faint: rgba(242, 237, 230, 0.45);
+  --current-bg: #ffd21f;  --current-fg: #121212;
+  --rec-bg: #161514;      --rec-ink: #f2ede6;
+  --rec-faint: rgba(255, 210, 31, 0.8);
+  --rec-soft: rgba(242, 237, 230, 0.55);
+  --rec-ring: #ffd21f;    --rec-btn: #161514;
+  --grill-dot: #ffd21f;   --grill-bg: rgba(255, 210, 31, 0.07);
+  --reel-plate: #2e2925;  --reel-tape: #5c4f47;   --reel-ring: #1a1816;
+  --reel-arm: #f2ede6;    --reel-key: #1a1816;
+  --knob-center: #302b27;
+  --dot-on: #f2ede6;      --dot-ahead: rgba(242, 237, 230, 0.45);  --dot-off: rgba(242, 237, 230, 0.12);
+  --bar-bg: #2a2724;      --bar-fg: rgba(242, 237, 230, 0.55);
+  --bar-sel-bg: #f2ede6;  --bar-sel-fg: #121212;
+  --backdrop: rgba(0, 0, 0, 0.55);
+  --frame: #0b0a0a;
 }
 
 * { box-sizing: border-box; }
@@ -28,7 +73,7 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: var(--beige-deep);
+  background: var(--frame);
   overscroll-behavior: none;
 }
 
@@ -96,6 +141,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   border-radius: 50%;
 }
 .round.ink { background: var(--ink); color: var(--paper-hi); }
+.round.soft { background: var(--paper-hi); color: var(--ink); }
+.round.soft svg { width: 20px; height: 20px; }
 
 .icon-btn {
   display: grid;
@@ -130,6 +177,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   padding: calc(var(--safe-top) + 10px) 20px 12px;
   background: var(--paper);
 }
+
+.top-actions { display: flex; align-items: center; gap: 10px; }
 
 .brand {
   margin: 0;
@@ -184,7 +233,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   line-height: 1;
   letter-spacing: -0.05em;
   white-space: nowrap;
-  color: var(--paper-hi);
+  color: var(--on-cover);
   pointer-events: none;
 }
 
@@ -217,6 +266,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   padding: 18px 18px 16px;
   border-radius: 22px;
   background: var(--yellow);
+  --ink: #121212;   /* always dark text on yellow, even in dark mode */
+  color: var(--ink);
 }
 .install-title { margin: 0 0 6px; font-size: 17px; font-weight: 700; }
 .install-text { margin: 0 0 14px; font-size: 15px; line-height: 1.4; }
@@ -280,7 +331,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 
 .song-play { width: 40px; height: 40px; background: var(--beige); color: var(--ink); }
 .song-play svg { width: 18px; height: 18px; }
-.song.is-current .song-play { background: var(--ink); color: var(--yellow); }
+.song.is-current .song-play { background: var(--current-bg); color: var(--current-fg); }
 
 .song-info { min-width: 0; text-align: left; }
 .song-name { display: block; font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -295,7 +346,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   color: var(--ink);
   padding: calc(var(--safe-top) + 8px) 20px 0;
 }
-.machine.yellow { background: var(--yellow); }
+.machine.yellow { background: var(--rec-bg); color: var(--rec-ink); }
 .machine.beige { background: var(--beige); }
 
 .machine-head {
@@ -315,7 +366,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.machine-title.faint, .machine-sub { color: rgba(18, 18, 18, 0.42); }
+.machine-title.faint { color: var(--faint); }
+.machine-sub { color: var(--rec-faint); }
 .machine-sub {
   display: inline-flex;
   align-items: center;
@@ -362,7 +414,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   height: min(54vw, 210px);
   margin: 0 auto;
   border-radius: 50%;
-  background: var(--ink);
+  background: var(--rec-ring);
 }
 .record-btn {
   display: grid;
@@ -370,7 +422,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   width: 48%;
   height: 48%;
   border-radius: 50%;
-  background: var(--yellow);
+  background: var(--rec-btn);
 }
 .rec-icon {
   width: 36%;
@@ -380,10 +432,10 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   transition: border-radius 0.2s ease, transform 0.2s ease;
 }
 .is-recording .rec-icon { border-radius: 14%; transform: scale(0.9); }
-/* While recording: a flat red ring around the button, with a yellow gap. */
-.is-recording .record-ring { box-shadow: 0 0 0 6px var(--yellow), 0 0 0 11px var(--red); }
+/* While recording: a flat red ring around the button, with a gap. */
+.is-recording .record-ring { box-shadow: 0 0 0 6px var(--rec-bg), 0 0 0 11px var(--red); }
 
-.record-hint { margin: 0; text-align: center; font-size: 15px; color: rgba(18, 18, 18, 0.55); }
+.record-hint { margin: 0; text-align: center; font-size: 15px; color: var(--rec-soft); }
 
 /* ============ Player (beige) ============ */
 #playerScreen {
@@ -393,11 +445,11 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 
 .reels { display: flex; justify-content: center; gap: 16px; }
 .reel { width: min(40vw, 160px); height: min(40vw, 160px); }
-.reel-plate { fill: #e6ded5; }
-.reel-tape { fill: #3b332e; }
-.reel-ring { fill: var(--paper-hi); }
-.reel-arm, .reel-hub { fill: var(--ink); }
-.reel-key { fill: var(--paper-hi); }
+.reel-plate { fill: var(--reel-plate); }
+.reel-tape { fill: var(--reel-tape); }
+.reel-ring { fill: var(--reel-ring); }
+.reel-arm, .reel-hub { fill: var(--reel-arm); }
+.reel-key { fill: var(--reel-key); }
 .reel-spin { transform-box: view-box; transform-origin: 50% 50%; }
 .is-playing .reel-spin { animation: spin var(--spin, 2.4s) linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -407,7 +459,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   justify-content: space-between;
   font-size: 17px;
   font-variant-numeric: tabular-nums;
-  color: rgba(18, 18, 18, 0.45);
+  color: var(--faint);
 }
 #pNow { color: var(--ink); font-weight: 600; }
 
@@ -442,7 +494,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   width: min(26vw, 104px);
   height: min(26vw, 104px);
   border-radius: 50%;
-  background: radial-gradient(circle, var(--paper-hi) 0 28%, var(--ink) 29%);
+  background: radial-gradient(circle, var(--knob-center) 0 28%, var(--ink) 29%);
   touch-action: none;
   cursor: grab;
 }
@@ -454,7 +506,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   height: 16%;
   margin-left: -2.5px;
   border-radius: 3px;
-  background: var(--paper-hi);
+  background: var(--knob-center);
 }
 
 /* The scrub wheel: a black donut. */
@@ -474,7 +526,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   height: 14%;
   margin-left: -2.5px;
   border-radius: 3px;
-  background: var(--paper-hi);
+  background: var(--knob-center);
 }
 .jog-mark.top { top: 7%; }
 .jog-mark.bottom { bottom: 7%; }
@@ -510,7 +562,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   gap: 4px;
   padding: 5px;
   border-radius: 999px;
-  background: var(--ink);
+  background: var(--bar-bg);
 }
 .tab {
   display: flex;
@@ -522,9 +574,9 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
-  color: rgba(246, 242, 237, 0.55);
+  color: var(--bar-fg);
 }
-.tab[aria-current="page"] { background: var(--paper-hi); color: var(--ink); }
+.tab[aria-current="page"] { background: var(--bar-sel-bg); color: var(--bar-sel-fg); }
 
 .mini {
   position: absolute;
@@ -580,7 +632,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   flex-direction: column;
   justify-content: flex-end;
   padding: 0 10px calc(var(--safe-bottom) + 6px);
-  background: rgba(18, 18, 18, 0.32);
+  background: var(--backdrop);
 }
 .action-sheet { color: var(--ink); }
 .sheet-title {
