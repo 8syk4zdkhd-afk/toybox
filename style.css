@@ -731,3 +731,71 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   .screen.enter-right, .screen.enter-up, .sheet-backdrop:not([hidden]) .action-sheet { animation: none; }
   .is-playing .reel-spin, .mini.is-playing .mini-reel { animation: none; }
 }
+
+/* ============ Rearranging (drag the handles, then Done) ============ */
+.rearrange {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+}
+.rearrange.enter-up { animation: enter-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.rearrange-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(var(--safe-top) + 10px) 20px 4px;
+}
+.rearrange-title {
+  margin: 0;
+  min-width: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rearrange-hint { margin: 0 20px 12px; font-size: 14px; color: var(--ink-soft); }
+.rearrange-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0 16px calc(var(--safe-bottom) + 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ra-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 6px 10px 12px;
+  border-radius: 16px;
+  background: var(--paper-hi);
+  position: relative;
+}
+.ra-item.is-dragging { z-index: 2; box-shadow: inset 0 0 0 2px var(--ink); }
+.ra-thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: var(--beige); }
+.ra-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ra-name { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ra-sub { font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ra-handle {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  color: var(--ink-soft);
+  touch-action: none;
+  cursor: grab;
+}
+.ra-handle:active { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .rearrange.enter-up { animation: none; } }

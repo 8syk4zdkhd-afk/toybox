@@ -83,11 +83,32 @@ const projectOf = (id) => (id ? projects.find((p) => p.id === id) : null) || LOO
 const trackById = (id) => tracks.find((t) => t.id === id) || null;
 const songsIn = (projectId) => tracks
   .filter((t) => (t.projectId || null) === projectId)
-  .sort((a, b) => b.addedAt - a.addedAt);
+  .sort((a, b) => {
+    // Songs you've arranged keep their place ("pos"). Songs added since then go on top, newest first.
+    if (a.pos == null && b.pos == null) return b.addedAt - a.addedAt;
+    if (a.pos == null) return -1;
+    if (b.pos == null) return 1;
+    return a.pos - b.pos;
+  });
+
+// Order of the project cards. "loose" stands for Loose ideas.
+let projectOrder = [];
+const keyOf = (project) => project.id || 'loose';
+function orderedProjects(includeLoose) {
+  const list = includeLoose ? [LOOSE, ...projects] : [...projects];
+  const rank = new Map(projectOrder.map((key, i) => [key, i]));
+  return list.sort((a, b) => {
+    const ra = rank.get(keyOf(a)), rb = rank.get(keyOf(b));
+    if (ra == null && rb == null) return (b.createdAt || Infinity) - (a.createdAt || Infinity); // new ones on top
+    if (ra == null) return -1;
+    if (rb == null) return 1;
+    return ra - rb;
+  });
+}
 
 async function save() {
   try {
-    await Store.saveLibrary(projects, tracks, { looseCover: LOOSE.cover, looseName: LOOSE.name });
+    await Store.saveLibrary(projects, tracks, { looseCover: LOOSE.cover, looseName: LOOSE.name, projectOrder });
   } catch (e) {
     toast('Couldn’t save. Is your phone full?');
   }
@@ -207,17 +228,18 @@ function cardFor(project, count) {
     show('project', 'enter-right');
   });
   card.querySelector('.card-more').addEventListener('click', () => projectMenu(project));
+  onLongPress(card.querySelector('.card-open'), rearrangeProjects);
   return card;
 }
 
 function renderLibrary() {
   const cards = $('cards');
   cards.innerHTML = '';
-  const loose = songsIn(null);
-  if (loose.length) cards.append(cardFor(LOOSE, loose.length));
-
-  const sorted = [...projects].sort((a, b) => b.createdAt - a.createdAt);
-  for (const project of sorted) cards.append(cardFor(project, songsIn(project.id).length));
+  for (const project of orderedProjects(true)) {
+    const count = songsIn(project.id).length;
+    if (!project.id && count === 0) continue; // Loose ideas only shows when it has songs
+    cards.append(cardFor(project, count));
+  }
 
   $('welcome').hidden = tracks.length > 0 || projects.length > 0;
 }
@@ -265,6 +287,7 @@ function songRow(track, list) {
     show('player', 'enter-up');
   });
   li.querySelector('.song-more').addEventListener('click', () => songMenu(track));
+  onLongPress(li.querySelector('.song-info'), () => rearrangeSongs(track.projectId || null));
   return li;
 }
 
@@ -440,7 +463,9 @@ function projectMenu(project) {
     { label: 'Rename', run: () => renameProject(project) },
     { label: 'Use a photo as cover', run: () => pickCover(project) },
     { label: 'New painted cover', run: () => newPaintedCover(project) },
+    { label: 'Rearrange projects', run: rearrangeProjects },
   ];
+  if (songsIn(project.id).length > 1) actions.splice(1, 0, { label: 'Rearrange songs', run: () => rearrangeSongs(project.id) });
   // "Loose ideas" can be renamed and get a new cover, but can't be deleted.
   if (project.id) actions.push({ label: 'Delete project', danger: true, run: () => deleteProject(project) });
   openSheet(project.name, actions);
@@ -555,18 +580,19 @@ function songMenu(track) {
   openSheet(track.name, [
     { label: 'Rename', run: () => renameTrack(track) },
     { label: 'Move to…', run: () => moveMenu(track) },
+    { label: 'Rearrange songs', run: () => rearrangeSongs(track.projectId || null) },
     { label: 'Share', run: () => shareTrack(track) },
     { label: 'Delete', danger: true, run: () => deleteTrack(track) },
   ]);
 }
 
 function moveMenu(track) {
-  const choices = [LOOSE, ...[...projects].sort((a, b) => b.createdAt - a.createdAt)];
-  openSheet('Move to', choices.map((p) => ({
+  openSheet('Move to', orderedProjects(true).map((p) => ({
     label: p.name,
     checked: (track.projectId || null) === p.id,
     run: async () => {
       track.projectId = p.id;
+      delete track.pos; // lands on top of its new project
       await save();
       refreshLists();
       toast(`Moved to ${p.name}`);
@@ -1115,13 +1141,177 @@ function renderRecordTarget() {
 }
 $('recordTarget').addEventListener('click', () => {
   if (recorder) return;
-  const choices = [LOOSE, ...[...projects].sort((a, b) => b.createdAt - a.createdAt)];
+  const choices = orderedProjects(true);
   openSheet('Save new ideas into', choices.map((p) => ({
     label: p.name,
     checked: recordTargetId === p.id,
     run: () => { recordTargetId = p.id; renderRecordTarget(); },
   })));
 });
+
+// ===================================================================
+// Rearranging projects and songs
+// A simple list: drag each row by its handle (≡), then tap Done.
+// Opened from the ••• menus, or by pressing and holding a card or a song.
+// ===================================================================
+const HANDLE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v2H4zM4 11h16v2H4zM4 15h16v2H4z"/></svg>';
+
+// Press and hold (about half a second) without moving.
+function onLongPress(el, run) {
+  let timer = null, startX = 0, startY = 0, fired = false;
+  el.addEventListener('pointerdown', (e) => {
+    fired = false; startX = e.clientX; startY = e.clientY;
+    clearTimeout(timer);
+    timer = setTimeout(() => { fired = true; tick(); run(); }, 550);
+  });
+  const cancel = () => clearTimeout(timer);
+  el.addEventListener('pointerup', cancel);
+  el.addEventListener('pointercancel', cancel);
+  el.addEventListener('pointerleave', cancel);
+  el.addEventListener('pointermove', (e) => {
+    if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) cancel();
+  });
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+  // After a long press, don't also treat it as a tap.
+  el.addEventListener('click', (e) => { if (fired) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
+}
+
+function openRearrange(title, items, onDone) {
+  closeSheet();
+  const panel = document.createElement('div');
+  panel.className = 'rearrange enter-up';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-label', title);
+  panel.innerHTML = `
+    <header class="rearrange-head">
+      <h2 class="rearrange-title"></h2>
+      <button class="pill ink small rearrange-done" type="button">Done</button>
+    </header>
+    <p class="rearrange-hint">Drag the handles to move things up or down.</p>
+    <ol class="rearrange-list"></ol>`;
+  panel.querySelector('.rearrange-title').textContent = title;
+  const list = panel.querySelector('.rearrange-list');
+
+  for (const item of items) {
+    const li = document.createElement('li');
+    li.className = 'ra-item';
+    li.dataset.key = item.key;
+    li.innerHTML = `
+      ${item.thumb ? '<img class="ra-thumb" alt="">' : ''}
+      <span class="ra-text"><span class="ra-name"></span><span class="ra-sub"></span></span>
+      <button class="ra-handle" type="button">${HANDLE}</button>`;
+    li.querySelector('.ra-name').textContent = item.name;
+    li.querySelector('.ra-sub').textContent = item.sub || '';
+    li.querySelector('.ra-handle').setAttribute('aria-label', `Move ${item.name}. Use the up and down arrow keys.`);
+    if (item.thumb) item.thumb.then((url) => { li.querySelector('.ra-thumb').src = url; });
+    list.append(li);
+  }
+
+  // Dragging: the row follows your finger and swaps places as it passes its neighbours.
+  let drag = null;
+  list.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.ra-handle');
+    if (!handle) return;
+    e.preventDefault();
+    const li = handle.closest('.ra-item');
+    handle.setPointerCapture(e.pointerId);
+    drag = { li, startY: e.clientY, lastY: e.clientY };
+    li.classList.add('is-dragging');
+  });
+  list.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    drag.lastY = e.clientY;
+    moveDragged();
+  });
+  function moveDragged() {
+    const { li } = drag;
+    const gap = 8;
+    let dy = drag.lastY - drag.startY;
+    const next = li.nextElementSibling, prev = li.previousElementSibling;
+    if (next && dy > (next.offsetHeight + gap) / 2) {
+      next.after(li); drag.startY += next.offsetHeight + gap; dy = drag.lastY - drag.startY; tick();
+    } else if (prev && dy < -(prev.offsetHeight + gap) / 2) {
+      prev.before(li); drag.startY -= prev.offsetHeight + gap; dy = drag.lastY - drag.startY; tick();
+    }
+    li.style.transform = `translateY(${dy}px)`;
+  }
+  const endDrag = () => {
+    if (!drag) return;
+    drag.li.style.transform = '';
+    drag.li.classList.remove('is-dragging');
+    drag = null;
+  };
+  list.addEventListener('pointerup', endDrag);
+  list.addEventListener('pointercancel', endDrag);
+
+  // Keep scrolling while you drag near the top or bottom of a long list.
+  const autoScroll = () => {
+    if (!panel.isConnected) return;
+    if (drag) {
+      const box = list.getBoundingClientRect();
+      const edge = 60;
+      let speed = 0;
+      if (drag.lastY < box.top + edge) speed = -8;
+      if (drag.lastY > box.bottom - edge) speed = 8;
+      if (speed) {
+        const before = list.scrollTop;
+        list.scrollTop += speed;
+        drag.startY -= list.scrollTop - before;
+        moveDragged();
+      }
+    }
+    requestAnimationFrame(autoScroll);
+  };
+  requestAnimationFrame(autoScroll);
+
+  // Keyboard: arrow keys on a handle move that row.
+  list.addEventListener('keydown', (e) => {
+    const handle = e.target.closest('.ra-handle');
+    if (!handle) return;
+    const li = handle.closest('.ra-item');
+    if (e.key === 'ArrowUp' && li.previousElementSibling) { li.previousElementSibling.before(li); handle.focus(); e.preventDefault(); }
+    if (e.key === 'ArrowDown' && li.nextElementSibling) { li.nextElementSibling.after(li); handle.focus(); e.preventDefault(); }
+  });
+
+  panel.querySelector('.rearrange-done').addEventListener('click', async () => {
+    const keys = [...list.children].map((li) => li.dataset.key);
+    panel.remove();
+    await onDone(keys);
+  });
+  app.append(panel);
+  panel.querySelector('.rearrange-done').focus();
+}
+
+function rearrangeProjects() {
+  const list = orderedProjects(true).filter((p) => p.id || songsIn(null).length);
+  if (list.length < 2) { toast('Make another project first'); return; }
+  openRearrange('Rearrange projects', list.map((p) => {
+    const n = songsIn(p.id).length;
+    return { key: keyOf(p), name: p.name, sub: `${n} ${n === 1 ? 'song' : 'songs'}`, thumb: coverUrl(p) };
+  }), async (keys) => {
+    // Keep Loose ideas' place even when it's hidden (empty).
+    projectOrder = keys.includes('loose') ? keys : ['loose', ...keys];
+    await save();
+    renderLibrary();
+    toast('Projects rearranged');
+  });
+}
+
+function rearrangeSongs(projectId) {
+  const list = songsIn(projectId);
+  if (list.length < 2) { toast('Add another song first'); return; }
+  openRearrange(`Rearrange ${projectOf(projectId).name}`, list.map((t) => ({
+    key: t.id, name: t.name, sub: formatTime(t.duration),
+  })), async (keys) => {
+    keys.forEach((id, i) => { const t = trackById(id); if (t) t.pos = i; });
+    await save();
+    refreshLists();
+    const playing = trackById(nowId);
+    if (playing && (playing.projectId || null) === projectId) queue = songsIn(projectId).map((x) => x.id);
+    toast('Songs rearranged');
+  });
+}
 
 // ===================================================================
 // Light and dark mode
@@ -1237,6 +1427,7 @@ async function start() {
     tracks = data.tracks;
     if (data.settings && data.settings.looseCover) LOOSE.cover = data.settings.looseCover;
     if (data.settings && data.settings.looseName) LOOSE.name = data.settings.looseName;
+    if (data.settings && Array.isArray(data.settings.projectOrder)) projectOrder = data.settings.projectOrder;
   } catch (e) {
     toast('ToyBox couldn’t open its storage');
   }
