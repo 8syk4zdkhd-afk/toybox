@@ -11,7 +11,6 @@
   --paper-hi: #f6f2ed;     /* little labels, menus */
   --beige: #d9d0c6;        /* the player */
   --beige-deep: #cbc1b6;   /* dial panels */
-  --yellow: #ffd21f;       /* small highlights */
   --blue: #0004ff;         /* the recorder: the blue from the app icon */
   --ink: #121212;          /* text and controls */
   --ink-soft: rgba(18, 18, 18, 0.5);
@@ -21,7 +20,7 @@
   /* Colors with a special job (dark mode swaps these, below) */
   --on-cover: #f6f2ed;             /* the giant name printed on covers */
   --faint: rgba(18, 18, 18, 0.42);
-  --current-bg: #121212;  --current-fg: #ffd21f;   /* the song that's playing */
+  --current-bg: #0004ff;  --current-fg: #ffffff;   /* the song that's playing */
   --rec-bg: #0004ff;      --rec-ink: #ffffff;      /* the recorder */
   --rec-faint: rgba(255, 255, 255, 0.7);
   --rec-soft: rgba(255, 255, 255, 0.78);
@@ -53,7 +52,7 @@
   --ink-soft: rgba(242, 237, 230, 0.55);
   --ink-line: rgba(242, 237, 230, 0.12);
   --faint: rgba(242, 237, 230, 0.45);
-  --current-bg: #ffd21f;  --current-fg: #121212;
+  --current-bg: #4b5bff;  --current-fg: #ffffff;
   --rec-bg: #161514;      --rec-ink: #f2ede6;
   --rec-faint: #8c97ff;
   --rec-soft: rgba(242, 237, 230, 0.55);
@@ -266,8 +265,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   margin: 0 16px 16px;
   padding: 18px 18px 16px;
   border-radius: 22px;
-  background: var(--yellow);
-  --ink: #121212;   /* always dark text on yellow, even in dark mode */
+  background: var(--blue);
+  --ink: #ffffff;   /* always white text on blue, even in dark mode */
   color: var(--ink);
 }
 .install-title { margin: 0 0 6px; font-size: 17px; font-weight: 700; }
@@ -347,7 +346,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   color: var(--ink);
   padding: calc(var(--safe-top) + 8px) 20px 0;
 }
-.machine.yellow { background: var(--rec-bg); color: var(--rec-ink); }
+.machine.blue { background: var(--rec-bg); color: var(--rec-ink); }
 .machine.beige { background: var(--beige); }
 
 .machine-head {
@@ -391,7 +390,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 .plain-btn { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; }
 .plain-btn svg { width: 28px; height: 28px; }
 
-/* ============ Record (yellow) ============ */
+/* ============ Record (blue) ============ */
 #recordScreen {
   justify-content: space-between;
   padding-bottom: calc(var(--safe-bottom) + 92px);
