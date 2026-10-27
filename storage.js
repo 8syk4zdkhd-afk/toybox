@@ -124,6 +124,20 @@ const Store = (() => {
     return url;
   }
 
+  // The file itself (for uploading to your account). null if it isn't on this device.
+  async function getFile(fileName) {
+    try {
+      if (isNative) {
+        const { data } = await FS.readFile({ path: 'toybox/media/' + fileName, directory: DIR });
+        const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+        return new Blob([bytes]);
+      }
+      return (await idb('files', 'readonly', (s) => s.get(fileName))) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function deleteFile(fileName) {
     const cached = urlCache.get(fileName);
     if (cached && cached.startsWith('blob:')) URL.revokeObjectURL(cached);
@@ -158,5 +172,5 @@ const Store = (() => {
     return 'downloaded';
   }
 
-  return { isNative, init, loadLibrary, saveLibrary, saveFile, fileUrl, deleteFile, shareFile };
+  return { isNative, init, loadLibrary, saveLibrary, saveFile, fileUrl, getFile, deleteFile, shareFile };
 })();

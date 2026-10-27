@@ -799,3 +799,29 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 }
 .ra-handle:active { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .rearrange.enter-up { animation: none; } }
+
+/* ============ Your account ============ */
+.acct-body { padding: 4px 20px calc(var(--safe-bottom) + 24px); overflow-y: auto; }
+.acct-lead { margin: 6px 0 20px; font-size: 17px; line-height: 1.4; }
+.acct-form { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+.field input {
+  height: 52px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--paper-hi);
+  box-shadow: inset 0 0 0 1.5px var(--ink-line);
+  color: var(--ink);
+  font: inherit;
+  font-size: 17px;          /* 16px or more stops iPhone from zooming in */
+  font-weight: 400;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.field input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--ink); }
+.acct-error { min-height: 20px; margin: 0; font-size: 15px; color: var(--red); }
+.acct-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.acct-actions .pill:disabled { opacity: 0.5; }
+.acct-status { margin: 0 0 20px; font-size: 15px; line-height: 1.4; color: var(--ink-soft); }
+.acct-note { margin: 24px 0 0; font-size: 14px; line-height: 1.4; color: var(--ink-soft); }

@@ -106,17 +106,34 @@ function orderedProjects(includeLoose) {
   });
 }
 
+let deleted = {};   // ids of things you deleted, so your other devices delete them too
+let savedAt = 0;    // when this library last changed
+
+function settingsSnapshot() {
+  return { looseCover: LOOSE.cover, looseName: LOOSE.name, projectOrder, deleted, savedAt };
+}
+function applySettings(settings) {
+  if (!settings) return;
+  if (settings.looseCover) LOOSE.cover = settings.looseCover;
+  if (settings.looseName) LOOSE.name = settings.looseName;
+  if (Array.isArray(settings.projectOrder)) projectOrder = settings.projectOrder;
+  if (settings.deleted) deleted = settings.deleted;
+  if (settings.savedAt) savedAt = settings.savedAt;
+}
+
 async function save() {
+  savedAt = Date.now();
   try {
-    await Store.saveLibrary(projects, tracks, { looseCover: LOOSE.cover, looseName: LOOSE.name, projectOrder });
+    await Store.saveLibrary(projects, tracks, settingsSnapshot());
   } catch (e) {
     toast('Couldn’t save. Is your phone full?');
   }
+  scheduleSync();
 }
 
 async function coverUrl(project) {
   if (project.cover && project.cover.photo) {
-    const url = await Store.fileUrl(project.cover.photo);
+    const url = await fileUrlAnywhere(project.cover.photo);
     if (url) return url;
   }
   const c = project.cover || { seed: 1, palette: 0 };
@@ -532,7 +549,7 @@ $('photoInput').addEventListener('change', async () => {
     const fileName = 'cover-' + makeId() + '.jpg';
     await Store.saveFile(fileName, photo);
     project.cover = { photo: fileName };
-    if (old) await Store.deleteFile(old);
+    if (old) await forgetFile(old);
     artworkCache.delete(project.id || 'loose');
     await save();
     refreshLists();
@@ -547,7 +564,7 @@ async function newPaintedCover(project) {
   const old = project.cover && project.cover.photo;
   const lastPalette = project.cover && project.cover.palette;
   project.cover = { seed: Covers.randomSeed(), palette: ((lastPalette ?? -1) + 1) % Covers.count };
-  if (old) await Store.deleteFile(old);
+  if (old) await forgetFile(old);
   artworkCache.delete(project.id || 'loose');
   await save();
   refreshLists();
@@ -563,7 +580,8 @@ function nowPlayingProjectId() {
 async function deleteProject(project) {
   if (!confirm(`Delete "${project.name}"? Its songs move to ${LOOSE.name}.`)) return;
   for (const t of tracks) if (t.projectId === project.id) t.projectId = null;
-  if (project.cover && project.cover.photo) await Store.deleteFile(project.cover.photo);
+  if (project.cover && project.cover.photo) await forgetFile(project.cover.photo);
+  deleted[project.id] = Date.now();
   projects = projects.filter((p) => p.id !== project.id);
   if (recordTargetId === project.id) recordTargetId = null;
   await save();
@@ -623,7 +641,8 @@ async function deleteTrack(track) {
   if (track.id === nowId) stopPlayer();
   queue = queue.filter((id) => id !== track.id);
   tracks = tracks.filter((t) => t.id !== track.id);
-  await Store.deleteFile(track.file);
+  deleted[track.id] = Date.now();
+  await forgetFile(track.file);
   await save();
   refreshLists();
   toast(`Deleted ${track.name}`);
@@ -637,8 +656,9 @@ async function playTrack(id, list) {
   if (!track) return;
   if (list) queue = list;
   nowId = id;
-  const url = await Store.fileUrl(track.file);
+  const url = await fileUrlAnywhere(track.file, true);
   if (!url) { toast('That song’s file is missing'); return; }
+  if (nowId !== id) return; // you picked another song while this one downloaded
   audio.src = url;
   applySpeed();
   try { await audio.play(); } catch (e) { /* the play button will show; tap to start */ }
@@ -1417,6 +1437,234 @@ document.querySelector('.brand').addEventListener('click', () => {
 });
 
 // ===================================================================
+// Your account and syncing
+// Signed in, ToyBox keeps your library and song files in your account too.
+// Each time you open it (or change something), it merges this phone's library
+// with your account's, uploads files your account doesn't have yet, and
+// downloads songs from your other devices the first time you play them.
+// ===================================================================
+let syncing = null;
+let syncAgain = false;
+let syncTimer = null;
+let syncStatus = { text: '', lastAt: 0, error: '' };
+
+function scheduleSync() {
+  if (!Cloud.enabled() || !Cloud.user()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(sync, 2500);
+}
+
+function setSyncStatus(text) {
+  syncStatus.text = text;
+  const line = document.querySelector('.acct-status');
+  if (line) line.textContent = text;
+}
+
+// Combine this phone's library with your account's. For anything changed on both,
+// the most recently saved library wins. Things deleted on either side stay deleted.
+function mergeLibraries(local, remote) {
+  if (!remote || !remote.settings) return local;
+  const ls = local.settings || {}, rs = remote.settings || {};
+  const remoteNewer = (rs.savedAt || 0) > (ls.savedAt || 0);
+  const gone = { ...(rs.deleted || {}), ...(ls.deleted || {}) };
+  const cutoff = Date.now() - 90 * 864e5; // forget very old deletions
+  for (const id of Object.keys(gone)) if (gone[id] < cutoff) delete gone[id];
+
+  const combine = (mine, theirs) => {
+    const byId = new Map();
+    for (const item of mine || []) byId.set(item.id, item);
+    for (const item of theirs || []) {
+      const here = byId.get(item.id);
+      if (!here) byId.set(item.id, item);
+      else if (remoteNewer) Object.assign(here, item); // keep the same object, take the newer details
+    }
+    return [...byId.values()].filter((item) => !gone[item.id]);
+  };
+  const settings = remoteNewer ? { ...ls, ...rs } : { ...rs, ...ls };
+  settings.deleted = gone;
+  settings.savedAt = Math.max(ls.savedAt || 0, rs.savedAt || 0);
+  return { version: 1, projects: combine(local.projects, remote.projects), tracks: combine(local.tracks, remote.tracks), settings };
+}
+
+function filesInUse() {
+  const names = tracks.map((t) => t.file);
+  for (const p of [...projects, LOOSE]) if (p.cover && p.cover.photo) names.push(p.cover.photo);
+  return [...new Set(names.filter(Boolean))];
+}
+
+async function sync() {
+  if (!Cloud.enabled() || !Cloud.user()) return;
+  if (syncing) { syncAgain = true; return; }
+  syncing = true;
+  setSyncStatus('Syncing…');
+  try {
+    const remote = await Cloud.getLibrary();
+    const merged = mergeLibraries({ version: 1, projects, tracks, settings: settingsSnapshot() }, remote);
+    projects = merged.projects;
+    tracks = merged.tracks;
+    applySettings(merged.settings);
+    const projectIds = new Set(projects.map((p) => p.id));
+    for (const t of tracks) if (t.projectId && !projectIds.has(t.projectId)) t.projectId = null;
+    await Store.saveLibrary(projects, tracks, settingsSnapshot());
+    refreshLists();
+    renderRecordTarget();
+
+    // Upload the files your account doesn't have yet.
+    const online = new Set(await Cloud.listFiles());
+    const missing = filesInUse().filter((f) => !online.has(f));
+    let sent = 0, tooBig = 0;
+    for (const fileName of missing) {
+      const blob = await Store.getFile(fileName);
+      if (!blob) continue; // not on this device; the device that has it will upload it
+      setSyncStatus(`Uploading ${sent + tooBig + 1} of ${missing.length}…`);
+      try {
+        await Cloud.upload(fileName, blob);
+        sent++;
+      } catch (e) {
+        if (e.message === 'too-large') tooBig++;
+        else throw e;
+      }
+    }
+    await Cloud.putLibrary({ version: 1, projects, tracks, settings: settingsSnapshot() });
+    syncStatus.lastAt = Date.now();
+    syncStatus.error = '';
+    const when = new Date(syncStatus.lastAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    setSyncStatus(tooBig
+      ? `Synced at ${when}. ${tooBig} ${tooBig === 1 ? 'song is' : 'songs are'} over 50 MB and only on this phone.`
+      : `Everything's saved to your account. Last synced ${when}.`);
+    if (sent > 2) toast(`Uploaded ${sent} files to your account`);
+  } catch (e) {
+    syncStatus.error = e.message;
+    setSyncStatus(`Couldn’t sync: ${e.message}`);
+    if (!Cloud.user()) renderAccountPanel();
+  } finally {
+    syncing = null;
+    if (syncAgain) { syncAgain = false; sync(); }
+  }
+}
+
+// A file that isn't on this phone yet: fetch it from your account and keep a copy.
+async function fileUrlAnywhere(fileName, announce) {
+  let url = await Store.fileUrl(fileName);
+  if (url || !Cloud.enabled() || !Cloud.user()) return url;
+  try {
+    if (announce) toast('Downloading from your account…');
+    const blob = await Cloud.download(fileName);
+    await Store.saveFile(fileName, blob);
+    url = await Store.fileUrl(fileName);
+  } catch (e) {
+    if (announce) toast(`Couldn’t download it: ${e.message}`);
+  }
+  return url;
+}
+
+// Remove a file from this phone, and from your account if signed in.
+async function forgetFile(fileName) {
+  if (!fileName) return;
+  await Store.deleteFile(fileName);
+  if (Cloud.enabled() && Cloud.user()) Cloud.removeFiles([fileName]).catch(() => {});
+}
+
+// ---------- The account screen ----------
+function openAccount() {
+  closeSheet();
+  let panel = document.getElementById('accountPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'accountPanel';
+    panel.className = 'rearrange account enter-up';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', 'Your account');
+    app.append(panel);
+  }
+  renderAccountPanel();
+}
+
+function renderAccountPanel() {
+  const panel = document.getElementById('accountPanel');
+  if (!panel) return;
+  const me = Cloud.user();
+  panel.innerHTML = `
+    <header class="rearrange-head">
+      <h2 class="rearrange-title">Your account</h2>
+      <button class="pill outline small acct-close" type="button">Close</button>
+    </header>
+    <div class="acct-body"></div>`;
+  panel.querySelector('.acct-close').addEventListener('click', () => panel.remove());
+  const body = panel.querySelector('.acct-body');
+
+  if (!me) {
+    body.innerHTML = `
+      <p class="acct-lead">Sign in to keep your songs safe online and see them on any device you sign in on.</p>
+      <form class="acct-form" novalidate>
+        <label class="field"><span>Email</span>
+          <input name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" required></label>
+        <label class="field"><span>Password</span>
+          <input name="password" type="password" autocomplete="current-password" minlength="6" required></label>
+        <p class="acct-error" role="alert"></p>
+        <div class="acct-actions">
+          <button class="pill ink" type="submit">Sign in</button>
+          <button class="pill outline" type="button" data-signup>Create account</button>
+        </div>
+      </form>`;
+    const form = body.querySelector('form');
+    const go = async (makeAccount) => {
+      const email = form.email.value.trim();
+      const password = form.password.value;
+      const error = body.querySelector('.acct-error');
+      if (!email || !password) { error.textContent = 'Type your email and a password.'; return; }
+      if (makeAccount && password.length < 6) { error.textContent = 'Use a password with at least 6 characters.'; return; }
+      error.textContent = '';
+      form.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+      try {
+        if (makeAccount) await Cloud.signUp(email, password);
+        else await Cloud.signIn(email, password);
+        renderAccountPanel();
+        toast(makeAccount ? 'Account created' : 'Signed in');
+        sync();
+      } catch (e) {
+        error.textContent = e.message;
+        form.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+      }
+    };
+    form.addEventListener('submit', (e) => { e.preventDefault(); go(false); });
+    form.querySelector('[data-signup]').addEventListener('click', () => go(true));
+    return;
+  }
+
+  body.innerHTML = `
+    <p class="acct-lead">Signed in as <b class="acct-email"></b></p>
+    <p class="acct-status" aria-live="polite"></p>
+    <div class="acct-actions">
+      <button class="pill ink" type="button" data-sync>Sync now</button>
+      <button class="pill outline" type="button" data-signout>Sign out</button>
+    </div>
+    <p class="acct-note">Your songs also stay on this phone, so they play with no internet.</p>`;
+  body.querySelector('.acct-email').textContent = me.email;
+  body.querySelector('.acct-status').textContent = syncStatus.text || 'Ready.';
+  body.querySelector('[data-sync]').addEventListener('click', sync);
+  body.querySelector('[data-signout]').addEventListener('click', async () => {
+    if (!confirm('Sign out? Your songs stay on this phone.')) return;
+    await Cloud.signOut();
+    syncStatus = { text: '', lastAt: 0, error: '' };
+    renderAccountPanel();
+    toast('Signed out');
+  });
+}
+
+function setUpAccount() {
+  const button = $('accountBtn');
+  button.hidden = !Cloud.enabled();
+  button.addEventListener('click', openAccount);
+  if (Cloud.enabled() && Cloud.user()) sync();
+  // Coming back to ToyBox: pick up changes made on your other devices.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - syncStatus.lastAt > 30000) scheduleSync();
+  });
+}
+
+// ===================================================================
 // 13. Start
 // ===================================================================
 async function start() {
@@ -1425,9 +1673,7 @@ async function start() {
     const data = await Store.loadLibrary();
     projects = data.projects;
     tracks = data.tracks;
-    if (data.settings && data.settings.looseCover) LOOSE.cover = data.settings.looseCover;
-    if (data.settings && data.settings.looseName) LOOSE.name = data.settings.looseName;
-    if (data.settings && Array.isArray(data.settings.projectOrder)) projectOrder = data.settings.projectOrder;
+    applySettings(data.settings);
   } catch (e) {
     toast('ToyBox couldn’t open its storage');
   }
@@ -1439,6 +1685,7 @@ async function start() {
   const splash = plugin('SplashScreen');
   if (splash) splash.hide().catch(() => {});
   setUpInstalling();
+  setUpAccount();
 }
 
 // Home-screen app: keep a copy for offline use, and in Safari show how to install.
