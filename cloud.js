@@ -10,11 +10,11 @@
 const Cloud = (() => {
   // Your Supabase project. The publishable key is meant to be public; the rules keep your songs private.
   const CONFIG = {
-    url: '',  // e.g. https://abcdefgh.supabase.co
-    key: '',  // the publishable / anon public key
+    url: 'https://nwrqnajygqalkvtqexbg.supabase.co',
+    key: 'sb_publishable_K6f_cgZ6rPA43rCdi0-Kvg_MTVYAM6z', // the publishable key (safe to be public)
   };
   // (Tests can point ToyBox at a stand-in server by setting window.TOYBOX_CLOUD before this file loads.)
-  if (window.TOYBOX_CLOUD && !CONFIG.url) Object.assign(CONFIG, window.TOYBOX_CLOUD);
+  if (window.TOYBOX_CLOUD) Object.assign(CONFIG, window.TOYBOX_CLOUD);
   const BUCKET = 'songs';
   const SESSION_KEY = 'toybox-session';
 
