@@ -232,12 +232,29 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 
 .hero {
   position: relative;
+  display: block;
+  width: calc(100% - 32px);
   margin: 0 16px;
   aspect-ratio: 1.3 / 1;
   border-radius: 28px;
   overflow: hidden;
   background: var(--beige);
 }
+.hero .giant { display: block; }
+.hero-edit {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--paper-hi);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Photos can be bright; dim them a little so the light name stays readable. */
+.has-photo .cover-img { filter: brightness(0.82); }
 
 .project-bar {
   display: flex;

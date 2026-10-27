@@ -87,7 +87,7 @@ const songsIn = (projectId) => tracks
 
 async function save() {
   try {
-    await Store.saveLibrary(projects, tracks);
+    await Store.saveLibrary(projects, tracks, { looseCover: LOOSE.cover });
   } catch (e) {
     toast('Couldn’t save. Is your phone full?');
   }
@@ -197,6 +197,7 @@ function cardFor(project, count) {
   card.querySelector('.chip').textContent = `${count} ${count === 1 ? 'song' : 'songs'}`;
   card.querySelector('.card-open').setAttribute('aria-label', `Open ${project.name}, ${count} songs`);
   card.querySelector('.card-more').setAttribute('aria-label', `Options for ${project.name}`);
+  card.classList.toggle('has-photo', Boolean(project.cover && project.cover.photo));
   coverUrl(project).then((url) => { card.querySelector('.cover-img').src = url; });
 
   card.querySelector('.card-open').addEventListener('click', () => {
@@ -227,6 +228,7 @@ function renderProject() {
   const hero = $('heroName');
   hero.textContent = project.name;
   hero.style.fontSize = giantSize(project.name, Math.min(window.innerWidth, 480) - 32, 52, 130) + 'px';
+  $('projectHero').classList.toggle('has-photo', Boolean(project.cover && project.cover.photo));
   coverUrl(project).then((url) => { $('heroImg').src = url; });
 
   $('projectCount').textContent = `${list.length} ${list.length === 1 ? 'song' : 'songs'}`;
@@ -432,19 +434,31 @@ async function newProject() {
 }
 
 function projectMenu(project) {
+  const coverActions = [
+    { label: 'Use a photo as cover', run: () => pickCover(project) },
+    { label: 'New painted cover', run: () => newPaintedCover(project) },
+  ];
   if (!project.id) {
-    openSheet(project.name, [{ label: 'Import songs', run: () => pickSongs(null) }]);
+    openSheet(project.name, [{ label: 'Import songs', run: () => pickSongs(null) }, ...coverActions]);
     return;
   }
   openSheet(project.name, [
     { label: 'Import songs', run: () => pickSongs(project.id) },
     { label: 'Rename', run: () => renameProject(project) },
-    { label: 'Choose cover photo', run: () => pickCover(project) },
-    { label: 'New painted cover', run: () => newPaintedCover(project) },
+    ...coverActions,
     { label: 'Delete project', danger: true, run: () => deleteProject(project) },
   ]);
 }
 $('projectMore').addEventListener('click', () => projectMenu(projectOf(openProjectId)));
+
+// Tap the big cover (or "Edit cover") on a project's page to change it.
+function coverMenu(project) {
+  openSheet('Cover art', [
+    { label: 'Use a photo', run: () => pickCover(project) },
+    { label: 'New painted cover', run: () => newPaintedCover(project) },
+  ]);
+}
+$('projectHero').addEventListener('click', () => coverMenu(projectOf(openProjectId)));
 
 async function renameProject(project) {
   const name = (prompt('Rename project', project.name) || '').trim();
@@ -459,19 +473,49 @@ function pickCover(project) {
   coverTarget = project;
   $('photoInput').click();
 }
+// Phone photos are huge. Shrink them to a sensible size so covers load fast and save space.
+async function shrinkPhoto(file) {
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = reject;
+      i.src = url;
+    });
+    const scale = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    return blob || file;
+  } catch (e) {
+    return file; // couldn't shrink it; keep the original
+  }
+}
+
 $('photoInput').addEventListener('change', async () => {
   const file = $('photoInput').files && $('photoInput').files[0];
   $('photoInput').value = '';
   if (!file || !coverTarget) return;
   const project = coverTarget;
-  const old = project.cover && project.cover.photo;
-  const fileName = 'cover-' + makeId() + endingFor(file.name, file.type).replace(/\.(mp3|m4a|wav|webm|ogg)$/, '.jpg');
-  await Store.saveFile(fileName, file);
-  project.cover = { photo: fileName };
-  if (old) await Store.deleteFile(old);
-  artworkCache.delete(project.id);
-  await save();
-  refreshLists();
+  try {
+    const photo = await shrinkPhoto(file);
+    const old = project.cover && project.cover.photo;
+    const fileName = 'cover-' + makeId() + '.jpg';
+    await Store.saveFile(fileName, photo);
+    project.cover = { photo: fileName };
+    if (old) await Store.deleteFile(old);
+    artworkCache.delete(project.id || 'loose');
+    await save();
+    refreshLists();
+    if (project.id === nowPlayingProjectId()) updateMediaSession();
+    toast('Cover updated');
+  } catch (e) {
+    toast('Couldn’t use that photo. Try another one.');
+  }
 });
 
 async function newPaintedCover(project) {
@@ -479,9 +523,16 @@ async function newPaintedCover(project) {
   const lastPalette = project.cover && project.cover.palette;
   project.cover = { seed: Covers.randomSeed(), palette: ((lastPalette ?? -1) + 1) % Covers.count };
   if (old) await Store.deleteFile(old);
-  artworkCache.delete(project.id);
+  artworkCache.delete(project.id || 'loose');
   await save();
   refreshLists();
+  if (project.id === nowPlayingProjectId()) updateMediaSession();
+}
+
+// Which project the song in the player belongs to (null = Loose ideas, undefined = nothing playing).
+function nowPlayingProjectId() {
+  const track = trackById(nowId);
+  return track ? (track.projectId || null) : undefined;
 }
 
 async function deleteProject(project) {
@@ -1081,6 +1132,7 @@ async function start() {
     const data = await Store.loadLibrary();
     projects = data.projects;
     tracks = data.tracks;
+    if (data.settings && data.settings.looseCover) LOOSE.cover = data.settings.looseCover;
   } catch (e) {
     toast('ToyBox couldn’t open its storage');
   }

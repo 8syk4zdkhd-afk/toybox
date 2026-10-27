@@ -72,17 +72,17 @@ const Store = (() => {
     } else {
       text = await idb('meta', 'readonly', (s) => s.get('library'));
     }
-    if (!text) return { projects: [], tracks: [] };
+    if (!text) return { projects: [], tracks: [], settings: {} };
     try {
       const data = JSON.parse(text);
-      return { projects: data.projects || [], tracks: data.tracks || [] };
+      return { projects: data.projects || [], tracks: data.tracks || [], settings: data.settings || {} };
     } catch (e) {
-      return { projects: [], tracks: [] };
+      return { projects: [], tracks: [], settings: {} };
     }
   }
 
-  async function saveLibrary(projects, tracks) {
-    const text = JSON.stringify({ version: 1, projects, tracks });
+  async function saveLibrary(projects, tracks, settings) {
+    const text = JSON.stringify({ version: 1, projects, tracks, settings: settings || {} });
     if (isNative) {
       await FS.writeFile({ path: LIBRARY, directory: DIR, data: text, encoding: 'utf8', recursive: true });
     } else {

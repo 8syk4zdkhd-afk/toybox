@@ -62,10 +62,12 @@
       </button>
     </header>
     <div id="projectScroll" class="scroll">
-      <div id="projectHero" class="hero">
+      <!-- The big cover. Tap it to change the cover art. -->
+      <button id="projectHero" class="hero" type="button" aria-label="Change cover art">
         <img id="heroImg" class="cover-img" alt="">
-        <p id="heroName" class="giant"></p>
-      </div>
+        <span id="heroName" class="giant"></span>
+        <span class="hero-edit">Edit cover</span>
+      </button>
       <div class="project-bar">
         <p id="projectCount" class="muted"></p>
         <div class="project-actions">
