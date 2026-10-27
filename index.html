@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<!--
+  TOYBOX — index.html
+  The skeleton: every screen of the app lives in this one page.
+  Screens: Library (your projects), Project (its songs), Record, Player.
+  Only one shows at a time; app.js switches between them.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#ece7e1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ToyBox">
+  <title>ToyBox</title>
+  <!-- These make ToyBox installable: its name, icon and colors on your home screen. -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/favicon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="app" data-screen="library">
+
+  <!-- ================= LIBRARY: your projects as big picture cards ================= -->
+  <section id="libraryScreen" class="screen paper" aria-label="Projects">
+    <header class="topbar">
+      <h1 class="brand">ToyBox</h1>
+      <button id="addBtn" class="round ink" type="button" aria-label="Add songs or a project">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+      </button>
+    </header>
+    <div id="libraryScroll" class="scroll">
+      <!-- Shown only in Safari (not the installed app): how to put ToyBox on the home screen. -->
+      <div id="installTip" class="install-tip" hidden>
+        <p class="install-title">Put ToyBox on your home screen</p>
+        <p class="install-text">Tap <span class="share-glyph" aria-label="the Share button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l4 4-1.4 1.4L13 6.8V15h-2V6.8L9.4 8.4 8 7zM5 10h3v2H7v8h10v-8h-1v-2h3v12H5z"/></svg></span> Share, then <b>Add to Home Screen</b>. Open ToyBox from there: songs you add here in Safari stay in Safari.</p>
+        <button id="installDone" class="pill outline small" type="button">Got it</button>
+      </div>
+      <div id="cards" class="cards"></div>
+      <div id="welcome" class="welcome" hidden>
+        <p class="welcome-big">Your songs live here.</p>
+        <p class="welcome-small">Bring in songs from Files, or record a quick idea.</p>
+        <div class="welcome-actions">
+          <button id="welcomeImport" class="pill ink" type="button">Import songs</button>
+          <button id="welcomeRecord" class="pill outline" type="button">Record an idea</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PROJECT: one project's songs ================= -->
+  <section id="projectScreen" class="screen paper push" aria-label="Project" hidden>
+    <header class="topbar">
+      <button id="backBtn" class="icon-btn" type="button" aria-label="Back to projects">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 6.4L14 5l-7 7 7 7 1.4-1.4L9.8 12z"/></svg>
+      </button>
+      <button id="projectMore" class="icon-btn" type="button" aria-label="Project options">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18" cy="12" r="1.8"/></svg>
+      </button>
+    </header>
+    <div id="projectScroll" class="scroll">
+      <div id="projectHero" class="hero">
+        <img id="heroImg" class="cover-img" alt="">
+        <p id="heroName" class="giant"></p>
+      </div>
+      <div class="project-bar">
+        <p id="projectCount" class="muted"></p>
+        <div class="project-actions">
+          <button id="projectImport" class="pill outline small" type="button">Add songs</button>
+          <button id="projectPlay" class="pill ink small" type="button">Play all</button>
+        </div>
+      </div>
+      <ol id="songList" class="songs"></ol>
+      <p id="projectEmpty" class="empty-note" hidden>No songs yet. Tap Add songs, or record an idea into this project.</p>
+    </div>
+  </section>
+
+  <!-- ================= RECORD: a yellow tape machine ================= -->
+  <section id="recordScreen" class="screen machine yellow" aria-label="Record" hidden>
+    <header class="machine-head">
+      <div>
+        <h2 class="machine-title">New idea</h2>
+        <button id="recordTarget" class="machine-sub" type="button">Loose ideas</button>
+      </div>
+    </header>
+    <div class="grill-wrap"><canvas id="grill" class="grill" aria-hidden="true"></canvas></div>
+    <p id="recordTime" class="record-time">00:00</p>
+    <div class="record-ring">
+      <button id="recordBtn" class="record-btn" type="button" aria-label="Start recording"><span class="rec-icon"></span></button>
+    </div>
+    <p id="recordHint" class="record-hint">Tap to record</p>
+  </section>
+
+  <!-- ================= PLAYER: a beige reel-to-reel ================= -->
+  <section id="playerScreen" class="screen machine beige sheet" aria-label="Player" hidden>
+    <header class="machine-head">
+      <div class="machine-titles">
+        <h2 id="pTitle" class="machine-title">Nothing playing</h2>
+        <p id="pSub" class="machine-title faint">Pick a song</p>
+      </div>
+      <button id="closePlayer" class="plain-btn" type="button" aria-label="Close player">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.4 8.6L6 10l6 6 6-6-1.4-1.4L12 13.2z"/></svg>
+      </button>
+    </header>
+
+    <div class="reels" aria-hidden="true">
+      <!-- Two reels. The dark "tape" circle shrinks on the left and grows on the right as the song plays. -->
+      <svg class="reel" viewBox="0 0 100 100">
+        <circle class="reel-plate" cx="50" cy="50" r="48"/>
+        <circle id="tapeL" class="reel-tape" cx="50" cy="50" r="44"/>
+        <g class="reel-spin">
+          <circle class="reel-ring" cx="50" cy="50" r="24"/>
+          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5"/>
+          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5" transform="rotate(120 50 50)"/>
+          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5" transform="rotate(240 50 50)"/>
+          <circle class="reel-hub" cx="50" cy="50" r="9"/>
+          <path class="reel-key" d="M50 45.5l4 7H46z"/>
+        </g>
+      </svg>
+      <svg class="reel" viewBox="0 0 100 100">
+        <circle class="reel-plate" cx="50" cy="50" r="48"/>
+        <circle id="tapeR" class="reel-tape" cx="50" cy="50" r="27"/>
+        <g class="reel-spin">
+          <circle class="reel-ring" cx="50" cy="50" r="24"/>
+          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5"/>
+          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5" transform="rotate(120 50 50)"/>
+          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5" transform="rotate(240 50 50)"/>
+          <circle class="reel-hub" cx="50" cy="50" r="9"/>
+          <path class="reel-key" d="M50 45.5l4 7H46z"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="times">
+      <span id="pNow" class="time">00:00</span>
+      <span id="pTotal" class="time">00:00</span>
+    </div>
+
+    <canvas id="dots" class="dots" aria-label="Song position. Drag to move around." role="slider"></canvas>
+
+    <div class="transport">
+      <button id="prevBtn" class="plain-btn" type="button" aria-label="Previous song">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zM9.5 12L18 18V6z"/></svg>
+      </button>
+      <button id="playBtn" class="play-btn" type="button" aria-label="Play"></button>
+      <button id="nextBtn" class="plain-btn" type="button" aria-label="Next song">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
+      </button>
+    </div>
+
+    <div class="dials">
+      <div class="dial-panel">
+        <div id="speedKnob" class="knob" role="slider" aria-label="Speed" tabindex="0"><span class="knob-mark"></span></div>
+        <div class="dial-label"><span>Speed <output id="speedOut">1.00×</output></span></div>
+        <button id="tapeBtn" class="tape-switch" type="button" aria-pressed="false">Tape</button>
+      </div>
+      <div class="dial-panel">
+        <div id="jog" class="jog" role="slider" aria-label="Scrub through the song" tabindex="0">
+          <span class="jog-mark top"></span><span class="jog-mark bottom"></span>
+        </div>
+        <div class="dial-label"><span>Scrub</span></div>
+        <span class="dial-hint">8 sec per turn</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Mini player and tab bar (float over the dark screens) ================= -->
+  <div id="mini" class="mini" hidden>
+    <button id="miniOpen" class="mini-open" type="button" aria-label="Open the player">
+      <svg class="mini-reel" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3"/><path d="M12 3v5M4.2 16.5l4.3-2.5M19.8 16.5l-4.3-2.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+      <span class="mini-text"><span id="miniTitle" class="mini-title"></span><span id="miniSub" class="mini-sub"></span></span>
+    </button>
+    <button id="miniPlay" class="mini-play" type="button" aria-label="Play"></button>
+  </div>
+
+  <nav id="tabbar" class="tabbar" aria-label="Main">
+    <button class="tab" data-tab="library" type="button" aria-current="page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v4H4zM4 11h16v4H4zM4 17h16v3H4z"/></svg><span>Projects</span>
+    </button>
+    <button class="tab" data-tab="record" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg><span>Record</span>
+    </button>
+    <button class="tab" data-tab="player" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 19h14v2H5z"/></svg><span>Player</span>
+    </button>
+  </nav>
+
+  <!-- Pop-up menu that slides up from the bottom -->
+  <div id="sheet" class="sheet-backdrop" hidden>
+    <div class="action-sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <p id="sheetTitle" class="sheet-title"></p>
+      <div id="sheetActions" class="sheet-actions"></div>
+      <button id="sheetCancel" class="sheet-cancel" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <input id="audioInput" type="file" accept="audio/*,.mp3,.m4a,.wav,.aif,.aiff,.caf,.flac,.ogg" multiple hidden>
+  <input id="photoInput" type="file" accept="image/*" hidden>
+  <audio id="audio" preload="auto" playsinline></audio>
+</div>
+
+<script src="covers.js"></script>
+<script src="storage.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

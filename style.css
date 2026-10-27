@@ -1,0 +1,623 @@
+/*
+  TOYBOX — style.css
+  Flat, 2D and retro, kept calm and simple.
+  • No glass, blur, gradients or shadows: just flat shapes and colors.
+  • Warm off-white everywhere, black for the things you touch,
+    yellow for recording, red only for "now" and "recording".
+*/
+
+:root {
+  --paper: #ece7e1;        /* the app's background */
+  --paper-hi: #f6f2ed;     /* little labels, menus */
+  --beige: #d9d0c6;        /* the player */
+  --beige-deep: #cbc1b6;   /* dial panels */
+  --yellow: #ffd21f;       /* the recorder */
+  --ink: #121212;          /* text and controls */
+  --ink-soft: rgba(18, 18, 18, 0.5);
+  --ink-line: rgba(18, 18, 18, 0.1);
+  --red: #ff3b30;
+
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+
+  --safe-top: max(env(safe-area-inset-top), 16px);
+  --safe-bottom: max(env(safe-area-inset-bottom), 10px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--beige-deep);
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
+
+:focus-visible { outline: 2.5px solid var(--ink); outline-offset: 3px; }
+
+[hidden] { display: none !important; }
+
+/* The whole app is one phone-sized box (centered on a computer screen). */
+.app {
+  position: relative;
+  max-width: 480px;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+.screen.paper { background: var(--paper); }
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll::-webkit-scrollbar { display: none; }
+
+/* ============ Shared pieces ============ */
+.round {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.round.ink { background: var(--ink); color: var(--paper-hi); }
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -2px -10px;
+  border-radius: 50%;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.pill.small { height: 36px; padding: 0 16px; font-size: 15px; }
+.pill.ink { background: var(--ink); color: var(--paper-hi); }
+.pill.outline { box-shadow: inset 0 0 0 1.5px var(--ink); }
+
+.muted { color: var(--ink-soft); }
+
+/* ============ Top bars ============ */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--safe-top) + 10px) 20px 12px;
+  background: var(--paper);
+}
+
+.brand {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+/* ============ Library ============ */
+#libraryScroll { padding: 4px 0 calc(var(--safe-bottom) + 170px); }
+
+.cards {
+  display: grid;
+  gap: 16px;
+  padding: 0 16px;
+}
+
+/* One project card: a flat poster, a small "songs" label, a ••• button, and a giant name. */
+.card {
+  position: relative;
+  aspect-ratio: 1.55 / 1;
+  border-radius: 28px;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--beige);
+}
+
+.card-open {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* The giant name: flat, light, cut off by the bottom edge like a poster. */
+.giant {
+  position: absolute;
+  left: 16px;
+  bottom: -0.16em;
+  margin: 0;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+  color: var(--paper-hi);
+  pointer-events: none;
+}
+
+.chip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--paper-hi);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.card-more {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  background: var(--paper-hi);
+  color: var(--ink);
+}
+.card-more svg { width: 20px; height: 20px; }
+
+.install-tip {
+  margin: 0 16px 16px;
+  padding: 18px 18px 16px;
+  border-radius: 22px;
+  background: var(--yellow);
+}
+.install-title { margin: 0 0 6px; font-size: 17px; font-weight: 700; }
+.install-text { margin: 0 0 14px; font-size: 15px; line-height: 1.4; }
+.share-glyph svg { width: 18px; height: 18px; vertical-align: -3px; }
+
+.welcome { padding: 16vh 28px 0; }
+.welcome-big { margin: 0 0 10px; font-size: 38px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.05; }
+.welcome-small { margin: 0 0 28px; font-size: 17px; line-height: 1.4; color: var(--ink-soft); max-width: 30ch; }
+.welcome-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* ============ Project ============ */
+#projectScroll { padding-bottom: calc(var(--safe-bottom) + 170px); }
+
+.hero {
+  position: relative;
+  margin: 0 16px;
+  aspect-ratio: 1.3 / 1;
+  border-radius: 28px;
+  overflow: hidden;
+  background: var(--beige);
+}
+
+.project-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 8px;
+}
+.project-bar p { margin: 0; font-size: 15px; }
+.project-actions { display: flex; gap: 8px; }
+
+.songs { list-style: none; margin: 0; padding: 0 16px; }
+
+.song {
+  display: grid;
+  grid-template-columns: 40px 1fr auto 36px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--ink-line);
+}
+.song:last-child { border-bottom: 0; }
+
+.song-play { width: 40px; height: 40px; background: var(--beige); color: var(--ink); }
+.song-play svg { width: 18px; height: 18px; }
+.song.is-current .song-play { background: var(--ink); color: var(--yellow); }
+
+.song-info { min-width: 0; text-align: left; }
+.song-name { display: block; font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.song-meta { display: block; margin-top: 1px; font-size: 13px; color: var(--ink-soft); }
+.song-time { font-size: 14px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.song-more { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--ink-soft); }
+
+.empty-note { margin: 18px 20px; color: var(--ink-soft); font-size: 15px; line-height: 1.4; }
+
+/* ============ Tape machines (shared) ============ */
+.machine {
+  color: var(--ink);
+  padding: calc(var(--safe-top) + 8px) 20px 0;
+}
+.machine.yellow { background: var(--yellow); }
+.machine.beige { background: var(--beige); }
+
+.machine-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.machine-titles { min-width: 0; }
+.machine-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.machine-title.faint, .machine-sub { color: rgba(18, 18, 18, 0.42); }
+.machine-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+.machine-sub::after {
+  content: "";
+  width: 9px;
+  height: 9px;
+  margin-top: -6px;
+  border-right: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.plain-btn { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; }
+.plain-btn svg { width: 28px; height: 28px; }
+
+/* ============ Record (yellow) ============ */
+#recordScreen {
+  justify-content: space-between;
+  padding-bottom: calc(var(--safe-bottom) + 92px);
+}
+.grill-wrap { display: grid; place-items: center; }
+.grill { width: min(66vw, 280px); height: min(66vw, 280px); }
+
+.record-time {
+  margin: 0;
+  text-align: center;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-ring {
+  display: grid;
+  place-items: center;
+  width: min(54vw, 210px);
+  height: min(54vw, 210px);
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.record-btn {
+  display: grid;
+  place-items: center;
+  width: 48%;
+  height: 48%;
+  border-radius: 50%;
+  background: var(--yellow);
+}
+.rec-icon {
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+  background: var(--red);
+  transition: border-radius 0.2s ease, transform 0.2s ease;
+}
+.is-recording .rec-icon { border-radius: 14%; transform: scale(0.9); }
+/* While recording: a flat red ring around the button, with a yellow gap. */
+.is-recording .record-ring { box-shadow: 0 0 0 6px var(--yellow), 0 0 0 11px var(--red); }
+
+.record-hint { margin: 0; text-align: center; font-size: 15px; color: rgba(18, 18, 18, 0.55); }
+
+/* ============ Player (beige) ============ */
+#playerScreen {
+  justify-content: space-between;
+  padding-bottom: calc(var(--safe-bottom) + 6px);
+}
+
+.reels { display: flex; justify-content: center; gap: 16px; }
+.reel { width: min(40vw, 160px); height: min(40vw, 160px); }
+.reel-plate { fill: #e6ded5; }
+.reel-tape { fill: #3b332e; }
+.reel-ring { fill: var(--paper-hi); }
+.reel-arm, .reel-hub { fill: var(--ink); }
+.reel-key { fill: var(--paper-hi); }
+.reel-spin { transform-box: view-box; transform-origin: 50% 50%; }
+.is-playing .reel-spin { animation: spin var(--spin, 2.4s) linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(18, 18, 18, 0.45);
+}
+#pNow { color: var(--ink); font-weight: 600; }
+
+.dots { width: 100%; height: min(22vh, 170px); touch-action: none; cursor: ew-resize; }
+
+.transport { display: flex; align-items: center; justify-content: center; gap: 30px; }
+.play-btn {
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--beige);
+}
+.play-btn svg { width: 32px; height: 32px; }
+
+.dials { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dial-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 10px 12px;
+  border-radius: 22px;
+  background: var(--beige-deep);
+}
+
+/* The speed knob: a black ring you turn. */
+.knob {
+  position: relative;
+  width: min(26vw, 104px);
+  height: min(26vw, 104px);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--paper-hi) 0 28%, var(--ink) 29%);
+  touch-action: none;
+  cursor: grab;
+}
+.knob-mark {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  width: 5px;
+  height: 16%;
+  margin-left: -2.5px;
+  border-radius: 3px;
+  background: var(--paper-hi);
+}
+
+/* The scrub wheel: a black donut. */
+.jog {
+  position: relative;
+  width: min(26vw, 104px);
+  height: min(26vw, 104px);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--beige-deep) 0 26%, var(--ink) 27%);
+  touch-action: none;
+  cursor: grab;
+}
+.jog-mark {
+  position: absolute;
+  left: 50%;
+  width: 5px;
+  height: 14%;
+  margin-left: -2.5px;
+  border-radius: 3px;
+  background: var(--paper-hi);
+}
+.jog-mark.top { top: 7%; }
+.jog-mark.bottom { bottom: 7%; }
+
+.dial-panel { gap: 8px; }
+.dial-label {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dial-label output { font-variant-numeric: tabular-nums; }
+.tape-switch, .dial-hint {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.tape-switch { box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 700; }
+.dial-hint { color: var(--ink-soft); }
+.tape-switch[aria-pressed="true"] { background: var(--ink); color: var(--beige); }
+
+/* ============ Mini player and tab bar ============ */
+.tabbar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 8px);
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--ink);
+}
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 82px;
+  padding: 7px 14px 6px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(246, 242, 237, 0.55);
+}
+.tab[aria-current="page"] { background: var(--paper-hi); color: var(--ink); }
+
+.mini {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(var(--safe-bottom) + 84px);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 10px 0 6px;
+  border-radius: 20px;
+  background: var(--paper-hi);
+  box-shadow: inset 0 0 0 1px var(--ink-line);
+}
+.mini-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding-left: 8px;
+  text-align: left;
+}
+.mini-reel { width: 30px; height: 30px; color: var(--ink); }
+.mini.is-playing .mini-reel { animation: spin 2.4s linear infinite; }
+.mini-text { display: flex; flex-direction: column; min-width: 0; }
+.mini-title { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-sub { font-size: 12.5px; color: var(--ink-soft); }
+.mini-play {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper-hi);
+}
+
+/* Which floating pieces show on which screen */
+.app[data-screen="player"] .tabbar,
+.app[data-screen="player"] .mini,
+.app[data-screen="record"] .mini { display: none !important; }
+
+/* ============ Pop-up menu and messages ============ */
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 10px calc(var(--safe-bottom) + 6px);
+  background: rgba(18, 18, 18, 0.32);
+}
+.action-sheet { color: var(--ink); }
+.sheet-title {
+  margin: 0;
+  padding: 14px 16px 12px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--ink-soft);
+  background: var(--paper-hi);
+  border-radius: 16px 16px 0 0;
+}
+.sheet-title:empty { display: none; }
+.sheet-actions { display: flex; flex-direction: column; overflow: hidden; border-radius: 0 0 16px 16px; }
+.sheet-title:empty + .sheet-actions { border-radius: 16px; }
+.sheet-actions button, .sheet-cancel {
+  height: 56px;
+  font-size: 18px;
+  background: var(--paper-hi);
+  border-top: 1px solid var(--ink-line);
+}
+.sheet-title:empty + .sheet-actions button:first-child { border-top: 0; }
+.sheet-actions button.danger { color: var(--red); }
+.sheet-actions button[aria-checked="true"] { font-weight: 700; }
+.sheet-actions button[aria-checked="true"]::after { content: "  \2713"; }
+.sheet-cancel { width: 100%; margin-top: 8px; border-radius: 16px; border-top: 0; font-weight: 600; }
+
+/* Little messages float just above the tab bar, so they never cover a title. */
+.toast {
+  position: absolute;
+  bottom: calc(var(--safe-bottom) + 156px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: calc(100% - 32px);
+  padding: 11px 18px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper-hi);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app[data-screen="player"] .toast { bottom: calc(var(--safe-bottom) + 24px); }
+
+/* ============ Movement (only when you do something) ============ */
+.screen.enter-right { animation: enter-right 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.screen.enter-up { animation: enter-up 0.34s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.sheet-backdrop:not([hidden]) .action-sheet { animation: enter-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes enter-right { from { transform: translateX(30%); opacity: 0; } }
+@keyframes enter-up { from { transform: translateY(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.enter-right, .screen.enter-up, .sheet-backdrop:not([hidden]) .action-sheet { animation: none; }
+  .is-playing .reel-spin, .mini.is-playing .mini-reel { animation: none; }
+}
