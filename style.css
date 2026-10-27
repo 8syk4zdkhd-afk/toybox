@@ -73,8 +73,18 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: var(--frame);
   overscroll-behavior: none;
+}
+
+/* Whatever sits behind the app matches the screen you're on, so no strip of a
+   different color can show at the very top or bottom of the phone. */
+html, body { background: var(--paper); }
+:root[data-screen="record"], :root[data-screen="record"] body { background: var(--rec-bg); }
+:root[data-screen="player"], :root[data-screen="player"] body { background: var(--beige); }
+
+/* On a computer screen, the phone-sized app sits in the middle of a plain frame. */
+@media (min-width: 481px) {
+  :root, :root body, :root[data-screen] body, :root[data-screen] { background: var(--frame); }
 }
 
 body {
@@ -105,11 +115,15 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 [hidden] { display: none !important; }
 
 /* The whole app is one phone-sized box (centered on a computer screen). */
+/* Pinned to all four edges of the screen, so it reaches all the way down
+   behind the iPhone's home bar. */
 .app {
-  position: relative;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
   max-width: 480px;
-  height: 100vh;
-  height: 100dvh;
   margin: 0 auto;
   overflow: hidden;
   background: var(--paper);

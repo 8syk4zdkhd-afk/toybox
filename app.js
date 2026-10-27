@@ -135,6 +135,7 @@ $('sheet').addEventListener('click', (e) => { if (e.target === $('sheet')) close
 function show(name, motion) {
   if (name === 'player' && app.dataset.screen !== 'player') screenBeforePlayer = app.dataset.screen;
   app.dataset.screen = name;
+  document.documentElement.dataset.screen = name; // lets the page behind the app match this screen's color
   for (const [key, el] of Object.entries(screens)) el.hidden = key !== name;
 
   const el = screens[name];
