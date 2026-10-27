@@ -146,6 +146,28 @@ function giantSize(name, width, min, max) {
   return Math.round(Math.max(min, Math.min(max, (width * 1.5) / Math.max(4, name.length))));
 }
 
+// Are you using a keyboard (Tab, arrows) or your finger? Menus only move the focus for keyboards.
+let usingKeyboard = false;
+document.addEventListener('keydown', (e) => { if (['Tab', 'Enter', ' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) usingKeyboard = true; }, true);
+document.addEventListener('pointerdown', () => { usingKeyboard = false; }, true);
+
+// Keep the app still on iPhone. Dragging on something that doesn't scroll (a menu, the dock,
+// a header) used to make iOS stretch and bounce the whole app like a rubber band.
+// Now a drag only moves things that really scroll: lists, the player, long menus.
+function scrollsWith(el) {
+  for (; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+    const style = getComputedStyle(el);
+    const canY = /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 1;
+    const canX = /(auto|scroll)/.test(style.overflowX) && el.scrollWidth > el.clientWidth + 1;
+    if (canY || canX) return true;
+    if (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true;
+  }
+  return false;
+}
+let dragCanScroll = true;
+document.addEventListener('touchstart', (e) => { dragCanScroll = e.touches.length > 1 || scrollsWith(e.target); }, { passive: true });
+document.addEventListener('touchmove', (e) => { if (!dragCanScroll && e.cancelable) e.preventDefault(); }, { passive: false });
+
 // A pop-up menu from the bottom of the screen. actions: [{ label, run, danger, checked }]
 function openSheet(title, actions) {
   const sheet = $('sheet');
@@ -162,7 +184,9 @@ function openSheet(title, actions) {
     box.append(b);
   }
   sheet.hidden = false;
-  box.querySelector('button')?.focus();
+  // Only jump to the first choice when you're using a keyboard. (On iPhone, moving the
+  // focus makes Safari scroll the whole page to "show" it, which made menus jump.)
+  if (usingKeyboard) box.querySelector('button')?.focus({ preventScroll: true });
 }
 function closeSheet() { $('sheet').hidden = true; }
 $('sheetCancel').addEventListener('click', closeSheet);
@@ -1739,7 +1763,7 @@ function openRearrange(title, items, onDone) {
     await onDone(keys);
   });
   app.append(panel);
-  panel.querySelector('.rearrange-done').focus();
+  if (usingKeyboard) panel.querySelector('.rearrange-done').focus({ preventScroll: true });
 }
 
 function rearrangeProjects() {

@@ -186,6 +186,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain; /* its own bounce stays inside it */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -499,6 +500,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 /* ============ Player: the project's picture, fading into the controls ============ */
 #playerScreen {
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   overflow-x: hidden;
   scrollbar-width: none;
   background: var(--pl-bg);
@@ -982,7 +984,15 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   border-radius: 16px 16px 0 0;
 }
 .sheet-title:empty { display: none; }
-.sheet-actions { display: flex; flex-direction: column; overflow: hidden; border-radius: 0 0 16px 16px; }
+.sheet-actions {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--safe-top) - var(--safe-bottom) - 150px); /* very long menus scroll */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 0 0 16px 16px;
+}
+.sheet-actions button { flex: none; }
 .sheet-title:empty + .sheet-actions { border-radius: 16px; }
 .sheet-actions button, .sheet-cancel {
   height: 56px;
@@ -1065,6 +1075,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   list-style: none;
   margin: 0;
   padding: 0 16px calc(var(--safe-bottom) + 24px);
@@ -1101,7 +1112,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) { .rearrange.enter-up { animation: none; } }
 
 /* ============ Your account ============ */
-.acct-body { padding: 4px 20px calc(var(--safe-bottom) + 24px); overflow-y: auto; }
+.acct-body { padding: 4px 20px calc(var(--safe-bottom) + 24px); overflow-y: auto; overscroll-behavior: contain; }
 .acct-lead { margin: 6px 0 20px; font-size: 17px; line-height: 1.4; }
 .acct-form { display: flex; flex-direction: column; gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
