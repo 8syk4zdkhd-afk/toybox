@@ -6,7 +6,7 @@
   (Your songs aren't here: they're saved separately and never leave your phone.)
 */
 
-const CACHE = 'toybox-v7';
+const CACHE = 'toybox-v8';
 const FILES = [
   './',
   './index.html',
@@ -15,10 +15,10 @@ const FILES = [
   './storage.js',
   './covers.js',
   './manifest.json',
-  './icons/apple-touch-icon.png',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/favicon.png',
+  './icons/toybox-icon-180-v3.png',
+  './icons/toybox-icon-192-v3.png',
+  './icons/toybox-icon-512-v3.png',
+  './icons/toybox-favicon-v3.png',
 ];
 
 self.addEventListener('install', (event) => {
