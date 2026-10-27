@@ -3,7 +3,7 @@
   Flat, 2D and retro, kept calm and simple.
   • No glass, blur, gradients or shadows: just flat shapes and colors.
   • Warm off-white everywhere, black for the things you touch,
-    yellow for recording, red only for "now" and "recording".
+    the icon's blue for recording, red only for "now" and "recording".
 */
 
 :root {
@@ -11,7 +11,8 @@
   --paper-hi: #f6f2ed;     /* little labels, menus */
   --beige: #d9d0c6;        /* the player */
   --beige-deep: #cbc1b6;   /* dial panels */
-  --yellow: #ffd21f;       /* the recorder */
+  --yellow: #ffd21f;       /* small highlights */
+  --blue: #0004ff;         /* the recorder: the blue from the app icon */
   --ink: #121212;          /* text and controls */
   --ink-soft: rgba(18, 18, 18, 0.5);
   --ink-line: rgba(18, 18, 18, 0.1);
@@ -21,11 +22,11 @@
   --on-cover: #f6f2ed;             /* the giant name printed on covers */
   --faint: rgba(18, 18, 18, 0.42);
   --current-bg: #121212;  --current-fg: #ffd21f;   /* the song that's playing */
-  --rec-bg: #ffd21f;      --rec-ink: #121212;      /* the recorder */
-  --rec-faint: rgba(18, 18, 18, 0.42);
-  --rec-soft: rgba(18, 18, 18, 0.55);
-  --rec-ring: #121212;    --rec-btn: #ffd21f;
-  --grill-dot: #121212;   --grill-bg: rgba(0, 0, 0, 0.06);
+  --rec-bg: #0004ff;      --rec-ink: #ffffff;      /* the recorder */
+  --rec-faint: rgba(255, 255, 255, 0.7);
+  --rec-soft: rgba(255, 255, 255, 0.78);
+  --rec-ring: #121212;    --rec-btn: #ffffff;
+  --grill-dot: #ffffff;   --grill-bg: rgba(255, 255, 255, 0.1);
   --reel-plate: #e6ded5;  --reel-tape: #3b332e;   --reel-ring: #f6f2ed;
   --reel-arm: #121212;    --reel-key: #f6f2ed;
   --knob-center: #f6f2ed;
@@ -41,7 +42,7 @@
   --safe-bottom: max(env(safe-area-inset-bottom), 10px);
 }
 
-/* Dark mode: warm near-black, light controls, and a dark recorder with yellow details. */
+/* Dark mode: warm near-black, light controls, and a dark recorder with blue details. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --paper: #141312;
@@ -54,10 +55,10 @@
   --faint: rgba(242, 237, 230, 0.45);
   --current-bg: #ffd21f;  --current-fg: #121212;
   --rec-bg: #161514;      --rec-ink: #f2ede6;
-  --rec-faint: rgba(255, 210, 31, 0.8);
+  --rec-faint: #8c97ff;
   --rec-soft: rgba(242, 237, 230, 0.55);
-  --rec-ring: #ffd21f;    --rec-btn: #161514;
-  --grill-dot: #ffd21f;   --grill-bg: rgba(255, 210, 31, 0.07);
+  --rec-ring: #4b5bff;    --rec-btn: #161514;
+  --grill-dot: #4b5bff;   --grill-bg: rgba(75, 91, 255, 0.1);
   --reel-plate: #2e2925;  --reel-tape: #5c4f47;   --reel-ring: #1a1816;
   --reel-arm: #f2ede6;    --reel-key: #1a1816;
   --knob-center: #302b27;
