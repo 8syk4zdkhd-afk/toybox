@@ -1,7 +1,8 @@
 /*
   TOYBOX — style.css
   Flat, 2D and retro, kept calm and simple.
-  • No glass, blur, gradients or shadows: just flat shapes and colors.
+  • No glass, gradients or shadows: just flat shapes and colors.
+    (The only blur is a quick one while the + tools melt in and out.)
   • Warm off-white everywhere, black for the things you touch,
     the icon's blue for recording, red only for "now" and "recording".
 */
@@ -32,6 +33,8 @@
   --dot-on: #121212;      --dot-ahead: rgba(18, 18, 18, 0.5);  --dot-off: rgba(18, 18, 18, 0.13);
   --bar-bg: #121212;      --bar-fg: rgba(246, 242, 237, 0.55);
   --bar-sel-bg: #f6f2ed;  --bar-sel-fg: #121212;
+  --tile-bg: #2b2a29;     --tile-fg: #f6f2ed;      --tile-label: rgba(246, 242, 237, 0.62);
+  --tools-edge: rgba(246, 242, 237, 0.07);
   --backdrop: rgba(18, 18, 18, 0.32);
   --frame: #cbc1b6;
 
@@ -39,6 +42,11 @@
 
   --safe-top: max(env(safe-area-inset-top), 16px);
   --safe-bottom: max(env(safe-area-inset-bottom), 10px);
+  --dock-h: 62px;   /* height of the tab bar, and the size of the round + */
+
+  /* Springy movement (app.js swaps in a real spring curve where the phone supports it). */
+  --spring: cubic-bezier(0.34, 1.3, 0.64, 1);        --spring-ms: 420ms;
+  --spring-bouncy: cubic-bezier(0.34, 1.6, 0.64, 1); --spring-bouncy-ms: 520ms;
 }
 
 /* Dark mode: warm near-black, light controls, and a dark recorder with blue details. */
@@ -64,6 +72,8 @@
   --dot-on: #f2ede6;      --dot-ahead: rgba(242, 237, 230, 0.45);  --dot-off: rgba(242, 237, 230, 0.12);
   --bar-bg: #2a2724;      --bar-fg: rgba(242, 237, 230, 0.55);
   --bar-sel-bg: #f2ede6;  --bar-sel-fg: #121212;
+  --tile-bg: #3a3632;     --tile-fg: #f2ede6;      --tile-label: rgba(242, 237, 230, 0.62);
+  --tools-edge: rgba(242, 237, 230, 0.08);
   --backdrop: rgba(0, 0, 0, 0.55);
   --frame: #0b0a0a;
 }
@@ -593,31 +603,163 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 .tape-switch[aria-pressed="true"] { background: var(--ink); color: var(--beige); }
 
 /* ============ Mini player and tab bar ============ */
-.tabbar {
+/* The dock holds the tab bar and the round + beside it. */
+.dock {
   position: absolute;
-  left: 50%;
+  left: 14px;
+  right: 14px;
   bottom: calc(var(--safe-bottom) + 8px);
-  transform: translateX(-50%);
-  z-index: 10;
+  z-index: 12;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.tabbar {
+  position: relative;
+  flex: 1;
+  min-width: 0;
   display: flex;
   gap: 4px;
+  height: var(--dock-h);
   padding: 5px;
   border-radius: 999px;
   background: var(--bar-bg);
+  transform-origin: 50% 100%;
 }
+/* The light pill behind the tab you're on. It glides to the tab you tap. */
+.tab-glider {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 0;
+  border-radius: 999px;
+  background: var(--bar-sel-bg);
+  transition: transform var(--spring-ms) var(--spring), width var(--spring-ms) var(--spring);
+}
+.tab-glider.still { transition: none; }
 .tab {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  min-width: 82px;
-  padding: 7px 14px 6px;
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--bar-fg);
+  transition: color 0.25s ease;
 }
-.tab[aria-current="page"] { background: var(--bar-sel-bg); color: var(--bar-sel-fg); }
+.tab[aria-current="page"] { color: var(--bar-sel-fg); }
+
+/* The round +. Pressed, it puffs up and lights; open, it turns into an ×. */
+.plus-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--dock-h);
+  height: var(--dock-h);
+  border-radius: 50%;
+  background: var(--bar-bg);
+  color: var(--tile-fg);
+  transition: background 0.3s ease, color 0.3s ease, transform var(--spring-ms) var(--spring);
+}
+.plus-btn svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  transition: transform var(--spring-bouncy-ms) var(--spring-bouncy);
+}
+.dock.open .tabbar { visibility: hidden; } /* hidden under the tools (and can't be tapped) */
+.dock.open .plus-btn { background: var(--tile-bg); }
+.dock.open .plus-btn svg { transform: rotate(45deg); }
+.plus-btn:active {
+  background: var(--bar-sel-bg);
+  color: var(--bar-sel-fg);
+  transform: scale(1.12);
+  transition: background 0s, color 0s, transform 0.12s ease-out;
+}
+
+/* The tools: a grid of big buttons that grows out of the tab bar. */
+.tools {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  right: calc(var(--dock-h) + 10px);
+  z-index: 2;
+  padding: 16px 8px 13px;
+  border-radius: 28px;
+  background: var(--bar-bg);
+  box-shadow: inset 0 0 0 1px var(--tools-edge);
+  transform-origin: 50% 100%;
+}
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  row-gap: 13px;
+}
+.tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--tile-fg);
+}
+.tool-tile {
+  display: grid;
+  place-items: center;
+  width: min(54px, 100%);
+  aspect-ratio: 1;
+  border-radius: 17px;
+  background: var(--tile-bg);
+  transition: background 0.35s ease, color 0.35s ease, transform var(--spring-ms) var(--spring);
+}
+.tool-tile svg {
+  width: 25px;
+  height: 25px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tool-tile .fill { fill: currentColor; stroke: none; }
+.tool-tile .rec-dot { fill: var(--red); stroke: none; }
+.tool-label {
+  max-width: 100%;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tile-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Pressing a tool lights it up, and it stays lit while the tools melt away. */
+.tool:active .tool-tile, .tool.picked .tool-tile {
+  background: var(--bar-sel-bg);
+  color: var(--bar-sel-fg);
+  transition: none;
+}
+.tool:active .tool-tile { transform: scale(0.94); }
+.tool.off .tool-tile, .tool.off .tool-label { opacity: 0.38; }
+
+/* An invisible layer: tap anywhere outside the tools to close them. */
+.tools-catcher {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  cursor: pointer; /* iPhones only send taps to things that look tappable */
+}
 
 .mini {
   position: absolute;
@@ -646,6 +788,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 }
 .mini-reel { width: 30px; height: 30px; color: var(--ink); }
 .mini.is-playing .mini-reel { animation: spin 2.4s linear infinite; }
+.mini { transition: opacity 0.2s ease; }
+.app.tools-open .mini { opacity: 0; pointer-events: none; }
 .mini-text { display: flex; flex-direction: column; min-width: 0; }
 .mini-title { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-sub { font-size: 12.5px; color: var(--ink-soft); }
@@ -660,7 +804,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 }
 
 /* Which floating pieces show on which screen */
-.app[data-screen="player"] .tabbar,
+.app[data-screen="player"] .dock,
 .app[data-screen="player"] .mini,
 .app[data-screen="record"] .mini { display: none !important; }
 
@@ -719,6 +863,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   text-overflow: ellipsis;
 }
 .app[data-screen="player"] .toast { bottom: calc(var(--safe-bottom) + 24px); }
+/* With the tools open, messages float above them instead. */
+.app.tools-open .toast { bottom: calc(var(--safe-bottom) + 214px); }
 
 /* ============ Movement (only when you do something) ============ */
 .screen.enter-right { animation: enter-right 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -730,6 +876,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
   .screen.enter-right, .screen.enter-up, .sheet-backdrop:not([hidden]) .action-sheet { animation: none; }
   .is-playing .reel-spin, .mini.is-playing .mini-reel { animation: none; }
+  .tab-glider, .plus-btn, .plus-btn svg, .tool-tile { transition-duration: 0.01s !important; }
+  .plus-btn:active, .tool:active .tool-tile { transform: none; }
 }
 
 /* ============ Rearranging (drag the handles, then Done) ============ */

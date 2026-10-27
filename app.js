@@ -5,6 +5,7 @@
    2. The app's memory          9. The player
    3. Small helpers            10. Dot display, reels and dials
    4. Moving between screens   11. Headphone and lock-screen controls
+      (4b. tab pill and + tools)
    5. Drawing the library      12. Recording
    6. Bringing in songs        13. Start
    7. Projects
@@ -188,6 +189,8 @@ function show(name, motion) {
     if (t.dataset.tab === tab) t.setAttribute('aria-current', 'page');
     else t.removeAttribute('aria-current');
   });
+  placeGlider(true);
+  if (name === 'player') closeTools(true); // the player covers the dock
 
   // Every screen is light, so the clock and battery at the top stay dark.
   const bar = plugin('StatusBar');
@@ -212,6 +215,264 @@ $('closePlayer').addEventListener('click', () => {
   const back = screenBeforePlayer === 'player' ? 'library' : screenBeforePlayer;
   if (back === 'project') renderProject(); else renderLibrary();
   show(back);
+});
+
+// ===================================================================
+// 4b. The dock: the gliding tab pill, and the + tools
+// Tap + and the tab bar melts into a grid of big tool buttons
+// (it goes blurry, stretches into the grid's shape, then comes into focus
+// with a little springy settle). The + turns into an ×.
+// Tap ×, a tool, or anywhere else, and the grid melts back into the tab bar.
+// ===================================================================
+
+// A spring, turned into a timing curve the browser can play.
+// Stiff springs move fast; less damping means more bounce.
+function springCurve(stiffness, damping) {
+  const w0 = Math.sqrt(stiffness);
+  const zeta = damping / (2 * w0);
+  const wd = w0 * Math.sqrt(1 - zeta * zeta);
+  const at = (t) => 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd * t) + (zeta * w0 / wd) * Math.sin(wd * t));
+  const seconds = Math.min(1.2, -Math.log(0.002) / (zeta * w0)); // until it's still
+  const points = [];
+  for (let i = 0; i <= 48; i++) points.push(i === 48 ? 1 : +at((seconds * i) / 48).toFixed(4));
+  return { easing: `linear(${points.join(', ')})`, ms: Math.round(seconds * 1000) };
+}
+const canSpring = !!(window.CSS && CSS.supports && CSS.supports('transition-timing-function', 'linear(0, 0.5, 1)'));
+const SPRING = canSpring
+  ? { soft: springCurve(420, 31), bouncy: springCurve(320, 19) }
+  : { soft: { easing: 'cubic-bezier(0.34, 1.3, 0.64, 1)', ms: 420 }, bouncy: { easing: 'cubic-bezier(0.34, 1.6, 0.64, 1)', ms: 520 } };
+if (canSpring) {
+  const root = document.documentElement.style;
+  root.setProperty('--spring', SPRING.soft.easing);
+  root.setProperty('--spring-ms', SPRING.soft.ms + 'ms');
+  root.setProperty('--spring-bouncy', SPRING.bouncy.easing);
+  root.setProperty('--spring-bouncy-ms', SPRING.bouncy.ms + 'ms');
+}
+const calmMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+// ---------- The light pill that glides between tabs ----------
+const tabbar = $('tabbar');
+const glider = tabbar.querySelector('.tab-glider');
+let gliderPlaced = false;
+function placeGlider(animate) {
+  const tab = tabbar.querySelector('.tab[aria-current="page"]');
+  if (!tab || !tabbar.offsetWidth) return; // the tab bar is hidden (in the player)
+  const still = !animate || !gliderPlaced;
+  glider.classList.toggle('still', still);
+  glider.style.width = tab.offsetWidth + 'px';
+  glider.style.transform = `translateX(${tab.offsetLeft}px)`;
+  if (still) { void glider.offsetWidth; glider.classList.remove('still'); }
+  gliderPlaced = true;
+}
+window.addEventListener('resize', () => placeGlider(false));
+
+// ---------- The + tools ----------
+const dock = $('dock');
+const tools = $('tools');
+const plusBtn = $('plusBtn');
+let toolsOpen = false;
+let toolsTurn = 0;     // goes up on every open/close, so an old animation finishing late is ignored
+let toolMotion = [];   // the animations playing right now
+
+function animateEl(el, frames, options) {
+  const a = el.animate(frames, options);
+  toolMotion.push(a);
+  return a;
+}
+function stopToolMotion() {
+  toolMotion.forEach((a) => a.cancel());
+  toolMotion = [];
+}
+
+// The tab bar's shape, described from the grid's point of view:
+// how much to squash the grid so it sits exactly where the tab bar is.
+function barShape() {
+  const bar = tabbar.getBoundingClientRect();
+  const box = tools.getBoundingClientRect();
+  const sx = bar.width / box.width;
+  const sy = bar.height / box.height;
+  const r = bar.height / 2;
+  return {
+    small: `scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`,
+    smallRadius: `${(r / sx).toFixed(2)}px / ${(r / sy).toFixed(2)}px`, // stays a pill while squashed
+    radius: getComputedStyle(tools).borderTopLeftRadius,
+  };
+}
+
+// Some tools change a little depending on where you are.
+function toolsContext() {
+  const inProject = app.dataset.screen === 'project';
+  const here = inProject ? openProjectId : null;
+  return {
+    inProject,
+    here,
+    songs: inProject ? songsIn(here) : tracks,
+    canRearrange: inProject
+      ? songsIn(here).length > 1
+      : orderedProjects(true).filter((p) => p.id || songsIn(null).length).length > 1,
+  };
+}
+
+function renderTools() {
+  const c = toolsContext();
+  const set = (name, label, off) => {
+    const b = tools.querySelector(`[data-tool="${name}"]`);
+    if (label) b.querySelector('.tool-label').textContent = label;
+    b.classList.toggle('off', !!off);
+    b.setAttribute('aria-label', label || b.querySelector('.tool-label').textContent);
+  };
+  set('record', recorder ? 'Stop' : 'Record');
+  set('import', 'Import');
+  set('project', 'New project');
+  set('shuffle', 'Shuffle', c.songs.length === 0);
+  set('rearrange', 'Rearrange', !c.canRearrange);
+  set('share', 'Share', !trackById(nowId));
+  set('theme', 'Theme');
+  set('account', 'Account', !Cloud.enabled());
+  tools.querySelectorAll('.tool.picked').forEach((b) => b.classList.remove('picked'));
+}
+
+function openTools() {
+  if (toolsOpen) return;
+  toolsOpen = true;
+  toolsTurn++;
+  stopToolMotion();
+  renderTools();
+  tools.hidden = false;
+  dock.classList.add('open');
+  app.classList.add('tools-open');
+  $('toolsCatcher').hidden = false;
+  plusBtn.setAttribute('aria-expanded', 'true');
+  plusBtn.setAttribute('aria-label', 'Close tools');
+  tick();
+
+  if (calmMotion()) {
+    animateEl(tools, [{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-out' });
+  } else {
+    const shape = barShape();
+    // 1. The tab bar goes blurry and fades, stretching up as it goes...
+    animateEl(tabbar, [
+      { filter: 'blur(0px)', opacity: 1, transform: 'none', visibility: 'visible' },
+      { filter: 'blur(10px)', opacity: 0, transform: 'scale(1, 1.6)', visibility: 'visible' },
+    ], { duration: 170, easing: 'ease-in' });
+    // 2. ...while the grid grows out of the tab bar's exact shape, with a springy settle...
+    animateEl(tools, [
+      { transform: shape.small, borderRadius: shape.smallRadius },
+      { transform: 'none', borderRadius: shape.radius },
+    ], { duration: SPRING.soft.ms, easing: SPRING.soft.easing });
+    // 3. ...starting blurry and coming into focus.
+    animateEl(tools, [
+      { filter: 'blur(14px)', opacity: 0 },
+      { filter: 'blur(10px)', opacity: 1, offset: 0.4 },
+      { filter: 'blur(0px)', opacity: 1 },
+    ], { duration: 320, easing: 'ease-out' });
+  }
+}
+
+function closeTools(instant) {
+  if (!toolsOpen) return;
+  toolsOpen = false;
+  const turn = ++toolsTurn;
+  const hadFocus = tools.contains(document.activeElement);
+  stopToolMotion();
+  dock.classList.remove('open');
+  app.classList.remove('tools-open');
+  $('toolsCatcher').hidden = true;
+  plusBtn.setAttribute('aria-expanded', 'false');
+  plusBtn.setAttribute('aria-label', 'Tools');
+  if (hadFocus) plusBtn.focus({ preventScroll: true });
+  const finish = () => { if (turn === toolsTurn) { tools.hidden = true; stopToolMotion(); } };
+
+  if (instant) { finish(); return; }
+  if (calmMotion()) {
+    animateEl(tools, [{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: 'forwards' }).finished.then(finish, () => {});
+    return;
+  }
+  const shape = barShape();
+  // 1. The grid blurs and squeezes back down into the tab bar's shape...
+  const squeeze = animateEl(tools, [
+    { transform: 'none', borderRadius: shape.radius },
+    { transform: shape.small, borderRadius: shape.smallRadius },
+  ], { duration: 280, easing: 'cubic-bezier(0.45, 0, 0.55, 1)', fill: 'forwards' });
+  animateEl(tools, [
+    { filter: 'blur(0px)', opacity: 1 },
+    { filter: 'blur(10px)', opacity: 1, offset: 0.5 },
+    { filter: 'blur(14px)', opacity: 0 },
+  ], { duration: 280, easing: 'ease-in', fill: 'forwards' });
+  // 2. ...and the tab bar comes back into focus where it lands.
+  animateEl(tabbar, [
+    { filter: 'blur(10px)', opacity: 0 },
+    { filter: 'blur(0px)', opacity: 1 },
+  ], { duration: 220, delay: 150, easing: 'ease-out', fill: 'backwards' });
+  animateEl(tabbar, [
+    { transform: 'scale(1, 1.6)' },
+    { transform: 'none' },
+  ], { duration: SPRING.soft.ms, delay: 150, easing: SPRING.soft.easing, fill: 'backwards' });
+  squeeze.finished.then(finish, () => {});
+}
+
+plusBtn.addEventListener('click', (e) => {
+  if (toolsOpen) { closeTools(); return; }
+  openTools();
+  // Opened with the keyboard? Put it on the first tool.
+  if (e.detail === 0) tools.querySelector('.tool').focus({ preventScroll: true });
+});
+$('toolsCatcher').addEventListener('click', () => closeTools());
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && toolsOpen) closeTools(); });
+// Lets iPhones show the "pressed" look while your finger is down.
+document.addEventListener('touchstart', () => {}, { passive: true });
+
+// What each tool does. Things that open something new wait a moment,
+// so the grid has melted away first. Things that need your tap
+// (picking files, the microphone, sharing) start right away.
+const later = (run) => setTimeout(run, calmMotion() ? 0 : 230);
+const TOOL_JOBS = {
+  record() {
+    const c = toolsContext();
+    if (recorder) { stopRecording(); return; }
+    if (c.inProject) recordTargetId = c.here;
+    renderRecordTarget();
+    show('record');
+    startRecording();
+  },
+  import() { pickSongs(toolsContext().here); },
+  project() { later(newProject); },
+  shuffle() {
+    const c = toolsContext();
+    if (!c.songs.length) { toast('No songs to shuffle yet'); return; }
+    const ids = c.songs.map((t) => t.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    playTrack(ids[0], ids);
+    toast(c.inProject ? `Shuffling ${projectOf(c.here).name}` : 'Shuffling all your songs');
+  },
+  rearrange() {
+    const c = toolsContext();
+    if (c.inProject && songsIn(c.here).length > 1) later(() => rearrangeSongs(c.here));
+    else if (c.inProject) toast('Add another song first');
+    else later(rearrangeProjects);
+  },
+  share() {
+    const track = trackById(nowId);
+    if (!track) { toast('Play a song first, then share it'); return; }
+    shareTrack(track);
+  },
+  theme() { later(openAppearance); },
+  account() {
+    if (!Cloud.enabled()) { toast('Accounts aren’t switched on yet'); return; }
+    later(openAccount);
+  },
+};
+
+tools.addEventListener('click', (e) => {
+  const button = e.target.closest('.tool');
+  if (!button) return;
+  button.classList.add('picked');
+  tick();
+  closeTools();
+  TOOL_JOBS[button.dataset.tool]();
 });
 
 // ===================================================================
@@ -443,10 +704,6 @@ $('audioInput').addEventListener('change', () => {
   $('audioInput').value = '';
 });
 
-$('addBtn').addEventListener('click', () => openSheet('', [
-  { label: 'Import songs', run: () => pickSongs(null) },
-  { label: 'New project', run: newProject },
-]));
 $('welcomeImport').addEventListener('click', () => pickSongs(null));
 $('welcomeRecord').addEventListener('click', () => { renderRecordTarget(); show('record'); });
 $('projectImport').addEventListener('click', () => pickSongs(openProjectId));
@@ -1371,14 +1628,14 @@ function setTheme(choice) {
   tick();
 }
 
-$('themeBtn').addEventListener('click', () => {
+function openAppearance() {
   const choice = themeChoice();
   openSheet('Appearance', [
     { label: 'Light', checked: choice === 'light', run: () => setTheme('light') },
     { label: 'Dark', checked: choice === 'dark', run: () => setTheme('dark') },
     { label: 'Match my phone', checked: choice === 'auto', run: () => setTheme('auto') },
   ]);
-});
+}
 if (systemDark && systemDark.addEventListener) {
   systemDark.addEventListener('change', () => { if (themeChoice() === 'auto') applyTheme(); });
 }
