@@ -2,7 +2,8 @@
   TOYBOX — style.css
   Flat, 2D and retro, kept calm and simple.
   • No glass, gradients or shadows: just flat shapes and colors.
-    (The only blur is a quick one while the + tools melt in and out.)
+    (The only blur is a quick one while the + tools melt in and out,
+    and the player's picture softly fades into the controls.)
   • Warm off-white everywhere, black for the things you touch,
     the icon's blue for recording, red only for "now" and "recording".
 */
@@ -10,8 +11,8 @@
 :root {
   --paper: #ece7e1;        /* the app's background */
   --paper-hi: #f6f2ed;     /* little labels, menus */
-  --beige: #d9d0c6;        /* the player */
-  --beige-deep: #cbc1b6;   /* dial panels */
+  --beige: #d9d0c6;        /* soft panels */
+  --beige-deep: #cbc1b6;
   --blue: #0004ff;         /* the recorder: the blue from the app icon */
   --ink: #121212;          /* text and controls */
   --ink-soft: rgba(18, 18, 18, 0.5);
@@ -27,8 +28,6 @@
   --rec-soft: rgba(255, 255, 255, 0.78);
   --rec-ring: #121212;    --rec-btn: #ffffff;
   --grill-dot: #ffffff;   --grill-bg: rgba(255, 255, 255, 0.1);
-  --reel-plate: #e6ded5;  --reel-tape: #3b332e;   --reel-ring: #f6f2ed;
-  --reel-arm: #121212;    --reel-key: #f6f2ed;
   --knob-center: #f6f2ed;
   --dot-on: #121212;      --dot-ahead: rgba(18, 18, 18, 0.5);  --dot-off: rgba(18, 18, 18, 0.13);
   --bar-bg: #121212;      --bar-fg: rgba(246, 242, 237, 0.55);
@@ -37,6 +36,12 @@
   --tools-edge: rgba(246, 242, 237, 0.07);
   --backdrop: rgba(18, 18, 18, 0.32);
   --frame: #cbc1b6;
+  /* the player */
+  --pl-bg: #ece7e1;       --pl-ink: #121212;
+  --pl-soft: rgba(18, 18, 18, 0.62);  --pl-faint: rgba(18, 18, 18, 0.5);
+  --pl-line: rgba(18, 18, 18, 0.14);  --pl-track: rgba(18, 18, 18, 0.13);
+  --pl-accent: #121212;   --pl-accent-ink: #f6f2ed;
+  --pl-card: rgba(18, 18, 18, 0.045); --pl-card-line: rgba(18, 18, 18, 0.1);
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
 
@@ -66,8 +71,6 @@
   --rec-soft: rgba(242, 237, 230, 0.55);
   --rec-ring: #4b5bff;    --rec-btn: #161514;
   --grill-dot: #4b5bff;   --grill-bg: rgba(75, 91, 255, 0.1);
-  --reel-plate: #2e2925;  --reel-tape: #5c4f47;   --reel-ring: #1a1816;
-  --reel-arm: #f2ede6;    --reel-key: #1a1816;
   --knob-center: #302b27;
   --dot-on: #f2ede6;      --dot-ahead: rgba(242, 237, 230, 0.45);  --dot-off: rgba(242, 237, 230, 0.12);
   --bar-bg: #2a2724;      --bar-fg: rgba(242, 237, 230, 0.55);
@@ -76,6 +79,11 @@
   --tools-edge: rgba(242, 237, 230, 0.08);
   --backdrop: rgba(0, 0, 0, 0.55);
   --frame: #0b0a0a;
+  --pl-bg: #121110;       --pl-ink: #ffffff;
+  --pl-soft: rgba(255, 255, 255, 0.72);  --pl-faint: rgba(255, 255, 255, 0.55);
+  --pl-line: rgba(255, 255, 255, 0.16);  --pl-track: rgba(255, 255, 255, 0.2);
+  --pl-accent: #f4ead8;   --pl-accent-ink: #121110;
+  --pl-card: rgba(255, 255, 255, 0.05);  --pl-card-line: rgba(255, 255, 255, 0.1);
 }
 
 * { box-sizing: border-box; }
@@ -90,7 +98,7 @@ html, body {
    different color can show at the very top or bottom of the phone. */
 html, body { background: var(--paper); }
 :root[data-screen="record"], :root[data-screen="record"] body { background: var(--rec-bg); }
-:root[data-screen="player"], :root[data-screen="player"] body { background: var(--beige); }
+:root[data-screen="player"], :root[data-screen="player"] body { background: var(--pl-bg); }
 
 /* On a computer screen, the phone-sized app sits in the middle of a plain frame. */
 @media (min-width: 481px) {
@@ -488,64 +496,253 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 
 .record-hint { margin: 0; text-align: center; font-size: 15px; color: var(--rec-soft); }
 
-/* ============ Player (beige) ============ */
+/* ============ Player: the project's picture, fading into the controls ============ */
 #playerScreen {
-  justify-content: space-between;
-  padding-bottom: calc(var(--safe-bottom) + 6px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  background: var(--pl-bg);
+  color: var(--pl-ink);
+}
+#playerScreen::-webkit-scrollbar { display: none; }
+.player-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
-.reels { display: flex; justify-content: center; gap: 16px; }
-.reel { width: min(40vw, 160px); height: min(40vw, 160px); }
-.reel-plate { fill: var(--reel-plate); }
-.reel-tape { fill: var(--reel-tape); }
-.reel-ring { fill: var(--reel-ring); }
-.reel-arm, .reel-hub { fill: var(--reel-arm); }
-.reel-key { fill: var(--reel-key); }
-.reel-spin { transform-box: view-box; transform-origin: 50% 50%; }
-.is-playing .reel-spin { animation: spin var(--spin, 2.4s) linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+/* The picture takes whatever room the controls leave, and fades out behind the song name. */
+.player-hero {
+  position: relative;
+  flex: 1 0 auto;
+  min-height: max(170px, 26vh);
+}
+.player-art {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100% + 84px);
+  object-fit: cover;
+  object-position: center 40%;
+  /* fade to the background at the bottom, and a soft shade at the top so the buttons show */
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 46%, rgba(0, 0, 0, 0.5) 70%, rgba(0, 0, 0, 0.14) 87%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 46%, rgba(0, 0, 0, 0.5) 70%, rgba(0, 0, 0, 0.14) 87%, transparent 100%);
+}
+.player-art:not([src]), .player-art[src=""] { visibility: hidden; }
+.player-hero::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--safe-top) + 90px);
+  z-index: 1;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
 
+.player-top {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 48px 1fr 48px;
+  align-items: center;
+  padding: calc(var(--safe-top) + 4px) 16px 0;
+  color: #fff;
+}
+.player-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; }
+.player-icon svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.player-icon .dot { fill: currentColor; stroke: none; }
+.player-brand {
+  justify-self: center;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.42em;
+  margin-right: -0.42em; /* keeps the spaced-out letters centered */
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.player-body {
+  position: relative;
+  z-index: 1;
+  padding: 0 32px calc(var(--safe-bottom) + 14px);
+}
+.player-title {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.player-sub {
+  margin: 6px 0 0;
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--pl-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The progress bar */
+.seek {
+  margin-top: 22px;
+  padding: 10px 0;
+  touch-action: none;
+  cursor: pointer;
+}
+.seek-track {
+  height: 7px;
+  border-radius: 999px;
+  background: var(--pl-track);
+  overflow: hidden;
+}
+.seek-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--pl-accent);
+}
 .times {
   display: flex;
   justify-content: space-between;
-  font-size: 17px;
+  margin-top: 2px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
-  color: var(--faint);
+  color: var(--pl-faint);
 }
-#pNow { color: var(--ink); font-weight: 600; }
 
-.dots { width: 100%; height: min(22vh, 170px); touch-action: none; cursor: ew-resize; }
-
-.transport { display: flex; align-items: center; justify-content: center; gap: 30px; }
+.transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(34px, 11vw, 58px);
+  margin-top: 20px;
+}
+.skip-btn {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  color: var(--pl-accent);
+}
+.skip-btn svg { width: 38px; height: 28px; }
 .play-btn {
   display: grid;
   place-items: center;
-  width: 74px;
-  height: 74px;
+  width: 66px;
+  height: 66px;
   border-radius: 50%;
-  background: var(--ink);
-  color: var(--beige);
+  background: var(--pl-accent);
+  color: var(--pl-accent-ink);
 }
-.play-btn svg { width: 32px; height: 32px; }
+.play-btn svg { width: 30px; height: 30px; }
+.skip-btn:active, .play-btn:active { transform: scale(0.93); }
 
-.dials { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* Version · BPM · Key */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 24px;
+}
+.fact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 6px;
+}
+.fact + .fact { box-shadow: inset 1px 0 0 var(--pl-line); }
+.fact-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  margin-right: -0.22em;
+  text-transform: uppercase;
+  color: var(--pl-faint);
+}
+.fact-value {
+  max-width: 100%;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fact-value.waiting { color: var(--pl-faint); }
+.fact:active .fact-value { opacity: 0.6; }
+
+/* The Tools pill: opens into a card with the speed knob and scrub wheel. */
+.player-tools {
+  margin: 22px -9px 0;
+  border-radius: 28px;
+  background: var(--pl-card);
+  box-shadow: inset 0 0 0 1px var(--pl-card-line);
+}
+.player-tools-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: 56px;
+  padding: 0 22px 0 24px;
+  text-align: left;
+}
+.ptools-icon { width: 24px; height: 24px; fill: var(--pl-bg); stroke: var(--pl-ink); stroke-width: 1.6; stroke-linecap: round; }
+.ptools-text { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.2; }
+.ptools-title { font-size: 15px; font-weight: 600; }
+.ptools-sub { font-size: 13px; color: var(--pl-faint); }
+.ptools-chev {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: var(--pl-ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--spring-ms) var(--spring);
+}
+.player-tools.open .ptools-chev { transform: rotate(180deg); }
+.player-tools-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--spring-ms) var(--spring);
+}
+.player-tools.open .player-tools-body { grid-template-rows: 1fr; }
+.player-tools-inner { min-height: 0; overflow: hidden; }
+.player-tools:not(.open) .player-tools-inner { visibility: hidden; transition: visibility 0s var(--spring-ms); }
+
+.dials {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 2px 12px 18px;
+}
 .dial-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px 10px 12px;
-  border-radius: 22px;
-  background: var(--beige-deep);
+  gap: 8px;
+  padding: 6px 6px 0;
 }
+.dial-panel + .dial-panel { box-shadow: inset 1px 0 0 var(--pl-line); }
 
-/* The speed knob: a black ring you turn. */
+/* The speed knob: a ring you turn. */
 .knob {
   position: relative;
-  width: min(26vw, 104px);
-  height: min(26vw, 104px);
+  width: min(25vw, 100px);
+  height: min(25vw, 100px);
   border-radius: 50%;
-  background: radial-gradient(circle, var(--knob-center) 0 28%, var(--ink) 29%);
+  background: radial-gradient(circle, var(--pl-bg) 0 28%, var(--pl-accent) 29%);
   touch-action: none;
   cursor: grab;
 }
@@ -557,16 +754,16 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   height: 16%;
   margin-left: -2.5px;
   border-radius: 3px;
-  background: var(--knob-center);
+  background: var(--pl-bg);
 }
 
-/* The scrub wheel: a black donut. */
+/* The scrub wheel: a donut you spin. */
 .jog {
   position: relative;
-  width: min(26vw, 104px);
-  height: min(26vw, 104px);
+  width: min(25vw, 100px);
+  height: min(25vw, 100px);
   border-radius: 50%;
-  background: radial-gradient(circle, var(--beige-deep) 0 26%, var(--ink) 27%);
+  background: radial-gradient(circle, var(--pl-bg) 0 26%, var(--pl-accent) 27%);
   touch-action: none;
   cursor: grab;
 }
@@ -577,17 +774,12 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   height: 14%;
   margin-left: -2.5px;
   border-radius: 3px;
-  background: var(--knob-center);
+  background: var(--pl-bg);
 }
 .jog-mark.top { top: 7%; }
 .jog-mark.bottom { bottom: 7%; }
 
-.dial-panel { gap: 8px; }
-.dial-label {
-  margin-top: 2px;
-  font-size: 14px;
-  font-weight: 600;
-}
+.dial-label { margin-top: 2px; font-size: 14px; font-weight: 600; }
 .dial-label output { font-variant-numeric: tabular-nums; }
 .tape-switch, .dial-hint {
   display: inline-flex;
@@ -598,9 +790,9 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.tape-switch { box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 700; }
-.dial-hint { color: var(--ink-soft); }
-.tape-switch[aria-pressed="true"] { background: var(--ink); color: var(--beige); }
+.tape-switch { box-shadow: inset 0 0 0 1.5px var(--pl-ink); font-weight: 700; }
+.dial-hint { color: var(--pl-faint); }
+.tape-switch[aria-pressed="true"] { background: var(--pl-accent); color: var(--pl-accent-ink); box-shadow: none; }
 
 /* ============ The dock: mini player and the round + ============ */
 /* The dock sits at the bottom: what's playing on the left, the round + on the right. */
@@ -747,6 +939,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 }
 .mini-reel { width: 30px; height: 30px; color: var(--tile-fg); }
 .mini.is-playing .mini-reel { animation: spin 2.4s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .app.tools-open .mini { visibility: hidden; } /* under the tools, and can't be tapped */
 .mini-text { display: flex; flex-direction: column; min-width: 0; }
 .mini-title { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -821,7 +1014,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.app[data-screen="player"] .toast { bottom: calc(var(--safe-bottom) + 24px); }
+.app[data-screen="player"] .toast { bottom: calc(var(--safe-bottom) + 84px); }
 /* With the tools open, messages float above them instead. */
 .app.tools-open .toast { bottom: calc(var(--safe-bottom) + 20px + var(--tools-h, 290px)); }
 
@@ -834,8 +1027,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .screen.enter-right, .screen.enter-up, .sheet-backdrop:not([hidden]) .action-sheet { animation: none; }
-  .is-playing .reel-spin, .mini.is-playing .mini-reel { animation: none; }
-  .plus-btn, .plus-btn svg, .tool-tile { transition-duration: 0.01s !important; }
+  .mini.is-playing .mini-reel { animation: none; }
+  .plus-btn, .plus-btn svg, .tool-tile, .player-tools-body, .ptools-chev { transition-duration: 0.01s !important; }
   .plus-btn:active, .tool:active .tool-tile { transform: none; }
 }
 

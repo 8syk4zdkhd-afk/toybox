@@ -113,75 +113,79 @@
     <p id="recordHint" class="record-hint">Tap to record</p>
   </section>
 
-  <!-- ================= PLAYER: a beige reel-to-reel ================= -->
-  <section id="playerScreen" class="screen machine beige sheet" aria-label="Player" hidden>
-    <header class="machine-head">
-      <div class="machine-titles">
-        <h2 id="pTitle" class="machine-title">Nothing playing</h2>
-        <p id="pSub" class="machine-title faint">Pick a song</p>
+  <!-- ================= PLAYER: the project's picture, fading into the controls ================= -->
+  <section id="playerScreen" class="screen player" aria-label="Player" hidden>
+    <div class="player-col">
+      <!-- The project's cover fills the top and fades away behind the song name. -->
+      <div class="player-hero">
+        <img id="pArt" class="player-art" alt="">
+        <header class="player-top">
+          <button id="closePlayer" class="player-icon" type="button" aria-label="Close player">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7"/></svg>
+          </button>
+          <span class="player-brand" aria-hidden="true">ToyBox</span>
+          <button id="playerMore" class="player-icon" type="button" aria-label="Song options">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="dot" cx="5.5" cy="12" r="1.7"/><circle class="dot" cx="12" cy="12" r="1.7"/><circle class="dot" cx="18.5" cy="12" r="1.7"/></svg>
+          </button>
+        </header>
       </div>
-      <button id="closePlayer" class="plain-btn" type="button" aria-label="Close player">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.4 8.6L6 10l6 6 6-6-1.4-1.4L12 13.2z"/></svg>
-      </button>
-    </header>
 
-    <div class="reels" aria-hidden="true">
-      <!-- Two reels. The dark "tape" circle shrinks on the left and grows on the right as the song plays. -->
-      <svg class="reel" viewBox="0 0 100 100">
-        <circle class="reel-plate" cx="50" cy="50" r="48"/>
-        <circle id="tapeL" class="reel-tape" cx="50" cy="50" r="44"/>
-        <g class="reel-spin">
-          <circle class="reel-ring" cx="50" cy="50" r="24"/>
-          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5"/>
-          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5" transform="rotate(120 50 50)"/>
-          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5" transform="rotate(240 50 50)"/>
-          <circle class="reel-hub" cx="50" cy="50" r="9"/>
-          <path class="reel-key" d="M50 45.5l4 7H46z"/>
-        </g>
-      </svg>
-      <svg class="reel" viewBox="0 0 100 100">
-        <circle class="reel-plate" cx="50" cy="50" r="48"/>
-        <circle id="tapeR" class="reel-tape" cx="50" cy="50" r="27"/>
-        <g class="reel-spin">
-          <circle class="reel-ring" cx="50" cy="50" r="24"/>
-          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5"/>
-          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5" transform="rotate(120 50 50)"/>
-          <rect class="reel-arm" x="41" y="27" width="18" height="13" rx="2.5" transform="rotate(240 50 50)"/>
-          <circle class="reel-hub" cx="50" cy="50" r="9"/>
-          <path class="reel-key" d="M50 45.5l4 7H46z"/>
-        </g>
-      </svg>
-    </div>
+      <div class="player-body">
+        <h2 id="pTitle" class="player-title">Nothing playing</h2>
+        <p id="pSub" class="player-sub">Pick a song</p>
 
-    <div class="times">
-      <span id="pNow" class="time">00:00</span>
-      <span id="pTotal" class="time">00:00</span>
-    </div>
-
-    <canvas id="dots" class="dots" aria-label="Song position. Drag to move around." role="slider"></canvas>
-
-    <div class="transport">
-      <button id="prevBtn" class="plain-btn" type="button" aria-label="Previous song">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zM9.5 12L18 18V6z"/></svg>
-      </button>
-      <button id="playBtn" class="play-btn" type="button" aria-label="Play"></button>
-      <button id="nextBtn" class="plain-btn" type="button" aria-label="Next song">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
-      </button>
-    </div>
-
-    <div class="dials">
-      <div class="dial-panel">
-        <div id="speedKnob" class="knob" role="slider" aria-label="Speed" tabindex="0"><span class="knob-mark"></span></div>
-        <div class="dial-label"><span>Speed <output id="speedOut">1.00×</output></span></div>
-        <button id="tapeBtn" class="tape-switch" type="button" aria-pressed="false">Tape</button>
-      </div>
-      <div class="dial-panel">
-        <div id="jog" class="jog" role="slider" aria-label="Scrub through the song" tabindex="0">
-          <span class="jog-mark top"></span><span class="jog-mark bottom"></span>
+        <!-- Where you are in the song. Tap or drag to jump. -->
+        <div id="seek" class="seek" role="slider" tabindex="0" aria-label="Song position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="seek-track"><div id="seekFill" class="seek-fill"></div></div>
         </div>
-        <div class="dial-label"><span>Scrub</span></div>
-        <span class="dial-hint">8 sec per turn</span>
+        <div class="times">
+          <span id="pNow" class="time">00:00</span>
+          <span id="pTotal" class="time">00:00</span>
+        </div>
+
+        <div class="transport">
+          <button id="prevBtn" class="skip-btn" type="button" aria-label="Previous song">
+            <svg viewBox="0 0 32 24" aria-hidden="true"><path d="M15 4.5v15L3 12zM29 4.5v15L17 12z"/></svg>
+          </button>
+          <button id="playBtn" class="play-btn" type="button" aria-label="Play"></button>
+          <button id="nextBtn" class="skip-btn" type="button" aria-label="Next song">
+            <svg viewBox="0 0 32 24" aria-hidden="true"><path d="M3 4.5v15L15 12zM17 4.5v15L29 12z"/></svg>
+          </button>
+        </div>
+
+        <!-- Version, tempo and key. Tap one to change it. -->
+        <div class="facts">
+          <button id="factVersion" class="fact" type="button"><span class="fact-label">Version</span><span id="pVersion" class="fact-value">—</span></button>
+          <button id="factBpm" class="fact" type="button"><span class="fact-label">BPM</span><span id="pBpm" class="fact-value">—</span></button>
+          <button id="factKey" class="fact" type="button"><span class="fact-label">Key</span><span id="pKey" class="fact-value">—</span></button>
+        </div>
+
+        <!-- Speed and scrub, folded away until you want them. -->
+        <div id="playerTools" class="player-tools">
+          <button id="toolsToggle" class="player-tools-head" type="button" aria-expanded="false" aria-controls="playerToolsBody">
+            <svg class="ptools-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h17M3.5 12h17M3.5 17.5h17"/><circle cx="8" cy="6.5" r="1.9"/><circle cx="15.5" cy="12" r="1.9"/><circle cx="8.5" cy="17.5" r="1.9"/></svg>
+            <span class="ptools-text"><span class="ptools-title">Tools</span><span class="ptools-sub">Speed / Scrub</span></span>
+            <svg class="ptools-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg>
+          </button>
+          <div id="playerToolsBody" class="player-tools-body">
+            <div class="player-tools-inner">
+              <div class="dials">
+                <div class="dial-panel">
+                  <div id="speedKnob" class="knob" role="slider" aria-label="Speed" tabindex="0"><span class="knob-mark"></span></div>
+                  <div class="dial-label"><span>Speed <output id="speedOut">1.00×</output></span></div>
+                  <button id="tapeBtn" class="tape-switch" type="button" aria-pressed="false">Tape</button>
+                </div>
+                <div class="dial-panel">
+                  <div id="jog" class="jog" role="slider" aria-label="Scrub through the song" tabindex="0">
+                    <span class="jog-mark top"></span><span class="jog-mark bottom"></span>
+                  </div>
+                  <div class="dial-label"><span>Scrub</span></div>
+                  <span class="dial-hint">8 sec per turn</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>

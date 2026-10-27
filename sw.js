@@ -6,7 +6,7 @@
   (Your songs aren't here: they're saved separately and never leave your phone.)
 */
 
-const CACHE = 'toybox-v19';
+const CACHE = 'toybox-v20';
 const FILES = [
   './',
   './index.html',
@@ -15,6 +15,7 @@ const FILES = [
   './storage.js',
   './covers.js',
   './cloud.js',
+  './facts-worker.js',
   './manifest.json',
   './icons/toybox-icon-180-v5.png',
   './icons/toybox-icon-192-v5.png',

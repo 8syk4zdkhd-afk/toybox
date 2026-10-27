@@ -3,7 +3,7 @@
   The brain. Parts:
    1. Pieces of the page       8. Changing one song
    2. The app's memory          9. The player
-   3. Small helpers            10. Dot display, reels and dials
+   3. Small helpers            10. Progress bar, song facts and dials
    4. Moving between screens   11. Headphone and lock-screen controls
       (4b. the dock and the + tools)
    5. Drawing the library      12. Recording
@@ -190,7 +190,7 @@ function show(name, motion) {
   const bar = plugin('StatusBar');
   if (bar) bar.setStyle({ style: 'LIGHT' }).catch(() => {});
 
-  if (name === 'player') { sizeDots(); drawDots(); }
+  if (name === 'player') drawProgress();
   if (name === 'record') { sizeGrill(); drawGrill(0); }
   renderMini();
 }
@@ -690,6 +690,7 @@ async function addSongs(fileList, projectId) {
         pps: info.pps,
         addedAt: Date.now() + added,
       });
+      wantFacts(id);
       added++;
       await save();
     } catch (e) {
@@ -891,6 +892,188 @@ async function renameTrack(track) {
   if (track.id === nowId) { renderPlayer(); updateMediaSession(); }
 }
 
+// ---------- Version, BPM and key ----------
+// "Version" is read from the song's name ("La Noche Mix 04", "Hook idea v3"...) unless you set it.
+const VERSION_WORDS = /(^|[^a-z])(mix|master|demo|take|draft|bounce|rev|edit|version|ver|v)[\s._#-]*(\d{1,3}[a-z]?)(?![0-9])/i;
+const VERSION_ALONE = /(^|[^a-z])(final|master|demo|rough|instrumental|acapella|a cappella)(?![a-z])/i;
+function guessVersion(name) {
+  const text = name || '';
+  let m = text.match(VERSION_WORDS);
+  if (m) {
+    const word = m[2].toLowerCase();
+    const label = ['v', 'ver', 'version'].includes(word) ? `v${m[3]}` : `${word[0].toUpperCase()}${word.slice(1)} ${m[3]}`;
+    return { label, start: m.index + m[1].length, end: m.index + m[0].length };
+  }
+  m = text.match(VERSION_ALONE);
+  if (m) {
+    const word = m[2];
+    return { label: word[0].toUpperCase() + word.slice(1).toLowerCase(), start: m.index + m[1].length, end: m.index + m[0].length };
+  }
+  return null;
+}
+// The big title leaves off a version at the end of the name ("La Noche - Mix 04" shows "La Noche").
+function displayTitle(track) {
+  const name = track.name || '';
+  const v = guessVersion(name);
+  if (!v || v.start === 0) return name;
+  const after = name.slice(v.end).trim();
+  if (after && !/^[)\]]$/.test(after)) return name;
+  const before = name.slice(0, v.start).replace(/[\s\-_–—([.,]+$/, '').trim();
+  return before || name;
+}
+
+function songFacts(track) {
+  const detected = track.facts || {};
+  const guessed = guessVersion(track.name);
+  return {
+    version: track.version || (guessed ? guessed.label : ''),
+    bpm: track.bpm != null ? track.bpm : detected.bpm,
+    key: track.key || detected.key || '',
+    listening: !track.facts && factsPending.has(track.id),
+  };
+}
+
+function renderFacts(track) {
+  const f = track ? songFacts(track) : { version: '', bpm: null, key: '', listening: false };
+  const set = (id, value, label) => {
+    const el = $(id);
+    const waiting = !value && f.listening && id !== 'pVersion';
+    el.textContent = value || (waiting ? '…' : '—');
+    el.classList.toggle('waiting', waiting);
+    el.parentElement.setAttribute('aria-label', `${label}: ${value || (waiting ? 'listening' : 'not set')}. Change`);
+  };
+  set('pVersion', f.version, 'Version');
+  set('pBpm', f.bpm != null ? String(f.bpm) : '', 'BPM');
+  set('pKey', f.key, 'Key');
+}
+
+// "fm", "F min", "Bb", "c# major"... → "F minor", "Bb major", "C# major"
+function tidyKey(text) {
+  const m = String(text || '').trim().match(/^([a-g])\s*(#|♯|b|♭|sharp|flat)?\s*(m|min|minor|maj|major|M)?$/i);
+  if (!m) return null;
+  const letter = m[1].toUpperCase();
+  const acc = !m[2] ? '' : (/#|♯|sharp/i.test(m[2]) ? '#' : 'b');
+  const minor = m[3] && /^m$|^min|^minor/.test(m[3]) && m[3] !== 'M';
+  return `${letter}${acc} ${minor ? 'minor' : 'major'}`;
+}
+
+async function editFact(which) {
+  const track = trackById(nowId);
+  if (!track) { toast('Pick a song first'); return; }
+  const f = songFacts(track);
+  if (which === 'version') {
+    const v = prompt('Version (like Mix 04). Leave empty to read it from the name.', f.version);
+    if (v === null) return;
+    if (v.trim()) track.version = v.trim(); else delete track.version;
+  }
+  if (which === 'bpm') {
+    const v = prompt('BPM. Leave empty to let ToyBox listen again.', f.bpm != null ? String(f.bpm) : '');
+    if (v === null) return;
+    if (!v.trim()) { delete track.bpm; delete track.facts; wantFacts(track.id, true); }
+    else {
+      const n = parseFloat(v.replace(',', '.'));
+      if (!isFinite(n) || n < 20 || n > 400) { toast('Type a number, like 92'); return; }
+      track.bpm = Math.round(n * 10) / 10;
+    }
+  }
+  if (which === 'key') {
+    const v = prompt('Key (like F minor or Bb). Leave empty to let ToyBox listen again.', f.key);
+    if (v === null) return;
+    if (!v.trim()) { delete track.key; delete track.facts; wantFacts(track.id, true); }
+    else {
+      const key = tidyKey(v);
+      if (!key) { toast('Try something like F minor or Bb major'); return; }
+      track.key = key;
+    }
+  }
+  await save();
+  renderPlayer();
+}
+$('factVersion').addEventListener('click', () => editFact('version'));
+$('factBpm').addEventListener('click', () => editFact('bpm'));
+$('factKey').addEventListener('click', () => editFact('key'));
+
+// Listening for tempo and key happens in the background (facts-worker.js), one song at a time.
+const factsQueue = [];
+const factsPending = new Set();
+let factsBusy = false;
+let factsWorker = null;
+let factsJob = 0;
+const factsReplies = new Map();
+
+function wantFacts(id, soon) {
+  const track = trackById(id);
+  if (track && track.facts) return;
+  if (factsPending.has(id)) {
+    const at = factsQueue.indexOf(id);
+    if (soon && at > 0) { factsQueue.splice(at, 1); factsQueue.unshift(id); }
+    return;
+  }
+  factsPending.add(id);
+  if (soon) factsQueue.unshift(id); else factsQueue.push(id);
+  if (id === nowId) renderFacts(trackById(id));
+  runFacts();
+}
+
+async function runFacts() {
+  if (factsBusy) return;
+  factsBusy = true;
+  while (factsQueue.length) {
+    const id = factsQueue.shift();
+    const track = trackById(id);
+    if (!track || track.facts) { factsPending.delete(id); continue; }
+    let facts = { bpm: null, key: null };
+    try {
+      let blob = await Store.getFile(track.file);
+      if (!blob) {
+        const url = await fileUrlAnywhere(track.file);
+        if (url) blob = await (await fetch(url)).blob();
+      }
+      if (blob) facts = await listenForFacts(blob);
+    } catch (e) { /* couldn't listen: leave them empty, you can type them in */ }
+    factsPending.delete(id);
+    const still = trackById(id);
+    if (still) {
+      still.facts = facts;
+      await save();
+      if (id === nowId) renderFacts(still);
+    }
+  }
+  factsBusy = false;
+}
+
+async function listenForFacts(blob) {
+  const ctx = getAudioContext();
+  if (!ctx || !window.Worker) return { bpm: null, key: null };
+  const data = await blob.arrayBuffer();
+  const buffer = await new Promise((resolve, reject) => ctx.decodeAudioData(data, resolve, reject));
+  // One channel, about 11,000 samples a second: plenty for tempo and key, and quick.
+  const step = Math.max(1, Math.round(buffer.sampleRate / 11025));
+  const length = Math.floor(buffer.length / step);
+  const mono = new Float32Array(length);
+  const channels = [];
+  for (let c = 0; c < Math.min(2, buffer.numberOfChannels); c++) channels.push(buffer.getChannelData(c));
+  for (let i = 0; i < length; i++) {
+    let sum = 0;
+    const from = i * step;
+    for (const ch of channels) for (let j = 0; j < step; j++) sum += ch[from + j];
+    mono[i] = sum / (step * channels.length);
+  }
+  if (!factsWorker) {
+    factsWorker = new Worker('facts-worker.js');
+    factsWorker.onmessage = (e) => {
+      const done = factsReplies.get(e.data.id);
+      if (done) { factsReplies.delete(e.data.id); done({ bpm: e.data.bpm, key: e.data.key }); }
+    };
+  }
+  const id = ++factsJob;
+  return new Promise((resolve) => {
+    factsReplies.set(id, resolve);
+    factsWorker.postMessage({ id, samples: mono, rate: buffer.sampleRate / step }, [mono.buffer]);
+    setTimeout(() => { if (factsReplies.has(id)) { factsReplies.delete(id); resolve({ bpm: null, key: null }); } }, 60000);
+  });
+}
+
 async function shareTrack(track) {
   try {
     await Store.shareFile(track.file, track.name);
@@ -922,6 +1105,7 @@ async function playTrack(id, list) {
   nowId = id;
   const url = await fileUrlAnywhere(track.file, true);
   if (!url) { toast('That song’s file is missing'); return; }
+  wantFacts(id, true);
   if (nowId !== id) return; // you picked another song while this one downloaded
   audio.src = url;
   applySpeed();
@@ -971,14 +1155,26 @@ function songLength() {
 
 function renderPlayer() {
   const track = trackById(nowId);
-  $('pTitle').textContent = track ? track.name : 'Nothing playing';
+  $('pTitle').textContent = track ? displayTitle(track) : 'Nothing playing';
   $('pSub').textContent = track ? projectOf(track.projectId).name : 'Pick a song';
   const playing = Boolean(track) && !audio.paused;
   $('playBtn').innerHTML = playing ? ICON.pause : ICON.play;
   $('playBtn').setAttribute('aria-label', playing ? 'Pause' : 'Play');
   screens.player.classList.toggle('is-playing', playing);
+  renderFacts(track);
+  renderPlayerArt(track);
   updateClock();
-  drawDots();
+}
+
+// The project's cover fills the top of the player.
+let playerArtKey = null;
+async function renderPlayerArt(track) {
+  const project = projectOf(track ? track.projectId : null);
+  const key = (project.id || 'loose') + JSON.stringify(project.cover || {});
+  if (key === playerArtKey) return;
+  playerArtKey = key;
+  const url = await coverUrl(project);
+  if (playerArtKey === key) $('pArt').src = url;
 }
 
 function updateClock() {
@@ -986,11 +1182,18 @@ function updateClock() {
   const now = Math.min(audio.currentTime || 0, total || Infinity);
   $('pNow').textContent = formatTime(now);
   $('pTotal').textContent = formatTime(total);
-  $('dots').setAttribute('aria-valuetext', `${formatTime(now)} of ${formatTime(total)}`);
-  // Tape moves from the left reel to the right reel as the song plays.
-  const p = total ? Math.min(1, now / total) : 0;
-  $('tapeL').setAttribute('r', (27 + 17 * (1 - p)).toFixed(1));
-  $('tapeR').setAttribute('r', (27 + 17 * p).toFixed(1));
+  drawProgress();
+}
+
+// The cream (or black) bar fills up as the song plays.
+function drawProgress() {
+  const total = songLength();
+  const now = Math.min(audio.currentTime || 0, total || Infinity);
+  const p = total ? Math.max(0, Math.min(1, now / total)) : 0;
+  $('seekFill').style.width = (p * 100).toFixed(2) + '%';
+  const seek = $('seek');
+  seek.setAttribute('aria-valuenow', String(Math.round(p * 100)));
+  seek.setAttribute('aria-valuetext', `${formatTime(now)} of ${formatTime(total)}`);
 }
 
 function applySpeed() {
@@ -1012,7 +1215,6 @@ function applySpeed() {
   }
   $('tapeBtn').textContent = tapeText;
   $('tapeBtn').setAttribute('aria-label', tapeMode ? `Tape mode on, ${tapeText.replace('Tape', '').trim() || 'normal pitch'}` : 'Tape mode off');
-  screens.player.style.setProperty('--spin', (2.4 / speed).toFixed(2) + 's');
   setPosition();
 }
 
@@ -1027,7 +1229,7 @@ $('tapeBtn').addEventListener('click', () => {
 });
 
 let lastPositionSent = 0;
-audio.addEventListener('play', () => { renderPlayer(); renderMini(); refreshSongRows(); startDotsLoop(); setPlaybackState(); });
+audio.addEventListener('play', () => { renderPlayer(); renderMini(); refreshSongRows(); startProgressLoop(); setPlaybackState(); });
 audio.addEventListener('pause', () => { renderPlayer(); renderMini(); refreshSongRows(); setPlaybackState(); });
 audio.addEventListener('ended', () => skip(1));
 audio.addEventListener('loadedmetadata', () => { updateClock(); setPosition(); });
@@ -1035,7 +1237,6 @@ audio.addEventListener('ratechange', setPosition);
 audio.addEventListener('seeked', setPosition);
 audio.addEventListener('timeupdate', () => {
   updateClock();
-  if (audio.paused) drawDots();
   if (Date.now() - lastPositionSent > 5000) setPosition();
 });
 audio.addEventListener('error', () => { if (nowId) toast('This song won’t play here. Try converting it to .mp3 or .m4a.'); });
@@ -1055,69 +1256,20 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ===================================================================
-// 10. Dot display, reels and dials
+// 10. Progress bar, song facts and dials
 // ===================================================================
-const dots = $('dots');
-const dotsCtx = dots.getContext('2d');
 let scrubbing = false;
 
-function sizeDots() {
-  const dpr = window.devicePixelRatio || 1;
-  dots.width = Math.round(dots.clientWidth * dpr);
-  dots.height = Math.round(dots.clientHeight * dpr);
-}
-
-// Each column of dots is a quarter second of the song. The red column is "now".
-function drawDots() {
-  if (app.dataset.screen !== 'player' || !dots.width) return;
-  const dpr = window.devicePixelRatio || 1;
-  const W = dots.width, H = dots.height;
-  const gap = 12 * dpr, r = 2.7 * dpr;
-  const cols = Math.floor(W / gap);
-  let rows = Math.floor(H / gap); if (rows % 2 === 0) rows -= 1;
-  const left = (W - (cols - 1) * gap) / 2, topY = (H - (rows - 1) * gap) / 2;
-  const mid = Math.floor(cols / 2), midRow = (rows - 1) / 2;
-
-  const track = trackById(nowId);
-  const total = songLength();
-  const now = audio.currentTime || 0;
-  const colSeconds = 0.25;
-
-  dotsCtx.clearRect(0, 0, W, H);
-  for (let c = 0; c < cols; c++) {
-    const t = now + (c - mid) * colSeconds;
-    let level = 0;
-    if (track && t >= 0 && t <= total) {
-      if (track.peaks && track.peaks.length) {
-        const a = Math.floor(t * track.pps), b = Math.max(a + 1, Math.floor((t + colSeconds) * track.pps));
-        for (let i = a; i < b && i < track.peaks.length; i++) level = Math.max(level, track.peaks[i] || 0);
-        level /= 100;
-      } else {
-        level = 0.2;
-      }
-    }
-    const lit = track && t >= 0 && t <= total ? Math.max(1, Math.round(level * rows)) : 0;
-    for (let row = 0; row < rows; row++) {
-      const on = Math.abs(row - midRow) * 2 < lit;
-      if (c === mid && track) dotsCtx.fillStyle = colors.red;
-      else if (on) dotsCtx.fillStyle = c < mid ? colors.dotOn : colors.dotAhead;
-      else dotsCtx.fillStyle = colors.dotOff;
-      dotsCtx.beginPath();
-      dotsCtx.arc(left + c * gap, topY + row * gap, r, 0, Math.PI * 2);
-      dotsCtx.fill();
-    }
-  }
-}
-
-let dotsLoop = null;
-function startDotsLoop() {
-  if (dotsLoop) return;
+// Smooth progress while playing (the clock only ticks a few times a second).
+let progressLoop = null;
+function startProgressLoop() {
+  if (progressLoop) return;
   const frame = () => {
-    if (audio.paused && !scrubbing) { dotsLoop = null; drawDots(); return; }
-    drawDots();
-    dotsLoop = requestAnimationFrame(frame);
+    if (audio.paused && !scrubbing) { progressLoop = null; drawProgress(); return; }
+    if (app.dataset.screen === 'player') drawProgress();
+    progressLoop = requestAnimationFrame(frame);
   };
-  dotsLoop = requestAnimationFrame(frame);
+  progressLoop = requestAnimationFrame(frame);
 }
 
 function seekTo(seconds) {
@@ -1125,24 +1277,47 @@ function seekTo(seconds) {
   if (!nowId || !total) return;
   audio.currentTime = Math.max(0, Math.min(total - 0.05, seconds));
   updateClock();
-  drawDots();
 }
 
-// Drag the dots sideways to move through the song.
-let dragX = null, dragFrom = 0;
-dots.addEventListener('pointerdown', (e) => {
+// Tap or drag along the bar to jump around the song.
+const seekBar = $('seek');
+let seekDragging = false;
+function seekFromPointer(e) {
+  const box = seekBar.getBoundingClientRect();
+  const p = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width));
+  seekTo(p * songLength());
+}
+seekBar.addEventListener('pointerdown', (e) => {
   if (!nowId) return;
-  dots.setPointerCapture(e.pointerId);
-  dragX = e.clientX; dragFrom = audio.currentTime; scrubbing = true;
+  seekBar.setPointerCapture(e.pointerId);
+  seekDragging = true; scrubbing = true;
+  seekFromPointer(e);
 });
-dots.addEventListener('pointermove', (e) => {
-  if (dragX == null) return;
-  const secondsPerPixel = 0.25 / 12;
-  seekTo(dragFrom - (e.clientX - dragX) * secondsPerPixel);
+seekBar.addEventListener('pointermove', (e) => { if (seekDragging) seekFromPointer(e); });
+const endSeek = () => { if (!seekDragging) return; seekDragging = false; scrubbing = false; setPosition(); };
+seekBar.addEventListener('pointerup', endSeek);
+seekBar.addEventListener('pointercancel', endSeek);
+seekBar.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') { seekTo(audio.currentTime + 5); e.preventDefault(); }
+  if (e.key === 'ArrowLeft') { seekTo(audio.currentTime - 5); e.preventDefault(); }
 });
-const endDrag = () => { dragX = null; scrubbing = false; setPosition(); };
-dots.addEventListener('pointerup', endDrag);
-dots.addEventListener('pointercancel', endDrag);
+
+// The Tools pill opens into the speed knob and scrub wheel.
+$('toolsToggle').addEventListener('click', () => {
+  const box = $('playerTools');
+  const open = !box.classList.contains('open');
+  box.classList.toggle('open', open);
+  $('toolsToggle').setAttribute('aria-expanded', String(open));
+  tick();
+  // Make sure the dials are on screen once they've opened.
+  if (open) setTimeout(() => box.scrollIntoView({ block: 'end', behavior: calmMotion() ? 'auto' : 'smooth' }), 260);
+});
+
+$('playerMore').addEventListener('click', () => {
+  const track = trackById(nowId);
+  if (track) songMenu(track);
+  else toast('Pick a song first');
+});
 
 // Angle (in degrees) of a finger around the middle of a dial. 0 = straight up.
 function angleAround(el, e) {
@@ -1208,7 +1383,6 @@ jog.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('resize', () => {
-  if (app.dataset.screen === 'player') { sizeDots(); drawDots(); }
   if (app.dataset.screen === 'record') { sizeGrill(); drawGrill(0); }
 });
 
@@ -1408,6 +1582,7 @@ async function finishRecording(pieces, mime) {
     };
     tracks.push(track);
     await save();
+    wantFacts(track.id);
     $('recordHint').textContent = `Saved to ${projectOf(recordTargetId).name}. Tap to record again.`;
     toast(`Saved “${track.name}”`);
   } catch (e) {
@@ -1608,7 +1783,6 @@ function readColors() {
   const get = (name) => css.getPropertyValue(name).trim();
   colors = {
     red: get('--red'),
-    dotOn: get('--dot-on'), dotAhead: get('--dot-ahead'), dotOff: get('--dot-off'),
     grillDot: get('--grill-dot'), grillBg: get('--grill-bg'),
   };
 }
@@ -1625,7 +1799,6 @@ function applyTheme() {
   document.querySelector('meta[name="theme-color"]').content = dark ? '#141312' : '#ece7e1';
   document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = dark ? 'black-translucent' : 'default';
   readColors();
-  drawDots();
   drawGrill(0);
 }
 
