@@ -215,7 +215,7 @@ function show(name, motion) {
   if (bar) bar.setStyle({ style: 'LIGHT' }).catch(() => {});
 
   if (name === 'player') drawProgress();
-  if (name === 'record') { sizeGrill(); drawGrill(0); }
+  if (name === 'record') { sizeWave(); drawWave(); }
   renderMini();
 }
 
@@ -1317,7 +1317,28 @@ function renderPlayer() {
   screens.player.classList.toggle('is-playing', playing);
   renderFacts(track);
   renderPlayerArt(track);
+  renderMarks(track);
   updateClock();
+}
+
+// Marks you tapped while recording, shown on the progress bar.
+let marksKey = '';
+function renderMarks(track) {
+  const total = songLength();
+  const list = (track && track.marks) || [];
+  const key = `${track ? track.id : ''}|${list.join(',')}|${Math.round(total)}`;
+  if (key === marksKey) return;
+  marksKey = key;
+  const box = $('seekMarks');
+  box.innerHTML = '';
+  if (!total) { marksKey = ''; return; }
+  for (const m of list) {
+    if (m > total) continue;
+    const el = document.createElement('span');
+    el.className = 'seek-mark';
+    el.style.left = `${(m / total) * 100}%`;
+    box.append(el);
+  }
 }
 
 // The project's cover fills the top of the player.
@@ -1510,7 +1531,7 @@ let lastPositionSent = 0;
 audio.addEventListener('play', () => { renderPlayer(); renderMini(); refreshSongRows(); startProgressLoop(); setPlaybackState(); });
 audio.addEventListener('pause', () => { if (switchingSource) return; renderPlayer(); renderMini(); refreshSongRows(); setPlaybackState(); });
 audio.addEventListener('ended', () => { if (!switchingSource) skip(1); });
-audio.addEventListener('loadedmetadata', () => { updateClock(); setPosition(); });
+audio.addEventListener('loadedmetadata', () => { updateClock(); setPosition(); renderMarks(trackById(nowId)); });
 audio.addEventListener('ratechange', setPosition);
 audio.addEventListener('seeked', setPosition);
 audio.addEventListener('timeupdate', () => {
@@ -1560,16 +1581,23 @@ function seekTo(seconds) {
 // Tap or drag along the bar to jump around the song.
 const seekBar = $('seek');
 let seekDragging = false;
-function seekFromPointer(e) {
+function seekFromPointer(e, snap) {
   const box = seekBar.getBoundingClientRect();
   const p = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width));
-  seekTo(p * songLength());
+  const total = songLength();
+  let t = p * total;
+  // a tap right next to a mark jumps exactly to it
+  const track = trackById(nowId);
+  if (snap && track && track.marks && total) {
+    for (const m of track.marks) if (Math.abs((m / total) * box.width - (e.clientX - box.left)) < 14) { t = m; break; }
+  }
+  seekTo(t);
 }
 seekBar.addEventListener('pointerdown', (e) => {
   if (!nowId) return;
   seekBar.setPointerCapture(e.pointerId);
   seekDragging = true; scrubbing = true;
-  seekFromPointer(e);
+  seekFromPointer(e, true);
 });
 seekBar.addEventListener('pointermove', (e) => { if (seekDragging) seekFromPointer(e); });
 const endSeek = () => { if (!seekDragging) return; seekDragging = false; scrubbing = false; setPosition(); };
@@ -1661,7 +1689,7 @@ jog.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('resize', () => {
-  if (app.dataset.screen === 'record') { sizeGrill(); drawGrill(0); }
+  if (app.dataset.screen === 'record') { sizeWave(); drawWave(); }
 });
 
 // ===================================================================
@@ -1730,41 +1758,94 @@ if ('mediaSession' in navigator) {
 
 // ===================================================================
 // 12. Recording
+// Your sound scrolls past the red line as you record. Pause and carry on,
+// and tap Mark at a good bit: the marks show up on the song's progress bar later.
 // ===================================================================
-const grill = $('grill');
-const grillCtx = grill.getContext('2d');
+const wave = $('wave');
+const waveCtx = wave.getContext('2d');
 let recorder = null, micStream = null, analyser = null, levelData = null;
-let recordStart = 0, recordClock = null, levelLoop = null;
-const levelHistory = new Array(12).fill(0);
+let recordStart = 0, pausedAt = 0, pausedTotal = 0, levelLoop = null;
+let waveBars = [];      // { t, level }: one bar every 60 ms
+let marks = [];         // seconds into the recording
+const BAR_SECONDS = 0.06;
+const PX_PER_SECOND = 50;
 
-function sizeGrill() {
-  const dpr = window.devicePixelRatio || 1;
-  grill.width = Math.round(grill.clientWidth * dpr);
-  grill.height = Math.round(grill.clientHeight * dpr);
+// How long you've been recording (not counting pauses).
+function elapsed() {
+  if (!recorder) return 0;
+  const now = pausedAt || performance.now();
+  return Math.max(0, (now - recordStart - pausedTotal) / 1000);
 }
 
-// A round speaker grill made of dots. While recording, your voice ripples out from the middle.
-function drawGrill(level) {
-  if (!grill.width) return;
-  const W = grill.width, H = grill.height, cx = W / 2, cy = H / 2;
-  const R = Math.min(W, H) / 2;
-  grillCtx.clearRect(0, 0, W, H);
-  grillCtx.fillStyle = colors.grillBg;
-  grillCtx.beginPath(); grillCtx.arc(cx, cy, R, 0, Math.PI * 2); grillCtx.fill();
-  const rings = 8;
-  const spacing = (R * 0.86) / rings;
-  for (let ring = 0; ring <= rings; ring++) {
-    const count = ring === 0 ? 1 : ring * 6;
-    const lv = recorder ? levelHistory[Math.min(levelHistory.length - 1, ring)] : 0;
-    const size = spacing * (0.26 + lv * 0.32);
-    grillCtx.fillStyle = colors.grillDot;
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 + (ring % 2 ? Math.PI / count : 0);
-      grillCtx.beginPath();
-      grillCtx.arc(cx + Math.cos(a) * ring * spacing, cy + Math.sin(a) * ring * spacing, size, 0, Math.PI * 2);
-      grillCtx.fill();
-    }
+function showTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  const cs = Math.floor((seconds % 1) * 100);
+  $('recordTime').innerHTML = `${m}:${String(s).padStart(2, '0')}<span class="rec-cs">.${String(cs).padStart(2, '0')}</span>`;
+}
+
+function sizeWave() {
+  const dpr = window.devicePixelRatio || 1;
+  wave.width = Math.round(wave.clientWidth * dpr);
+  wave.height = Math.round(wave.clientHeight * dpr);
+}
+
+// The scrolling picture of your sound, with the red "now" line in the middle.
+function drawWave() {
+  if (!wave.width) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = wave.width, H = wave.height;
+  const cx = Math.round(W / 2);
+  const top = 22 * dpr;                      // room for the time labels
+  const mid = top + (H - top) / 2;
+  const maxH = (H - top) * 0.92;
+  const now = elapsed();
+  const pps = PX_PER_SECOND * dpr;
+  waveCtx.clearRect(0, 0, W, H);
+
+  // centre line
+  waveCtx.fillStyle = colors.recLine;
+  waveCtx.fillRect(0, Math.round(mid), W, Math.max(1, dpr));
+
+  // seconds along the top
+  waveCtx.fillStyle = colors.recTick;
+  waveCtx.font = `600 ${11 * dpr}px -apple-system, "SF Pro Text", Inter, sans-serif`;
+  waveCtx.textAlign = 'center';
+  waveCtx.textBaseline = 'top';
+  for (let sec = Math.floor(now); sec >= 0 && cx - (now - sec) * pps > -40 * dpr; sec--) {
+    const x = cx - (now - sec) * pps;
+    waveCtx.fillText(`${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`, x, 0);
+    waveCtx.fillRect(x - dpr / 2, top - 6 * dpr, dpr, 4 * dpr);
   }
+
+  // the bars (newest nearest the line)
+  const barW = Math.max(1, Math.round(2 * dpr));
+  for (let i = waveBars.length - 1; i >= 0; i--) {
+    const b = waveBars[i];
+    const x = cx - (now - b.t) * pps - barW - dpr;
+    if (x < -barW) break;
+    const h = Math.max(2 * dpr, Math.min(1, b.level) * maxH);
+    waveCtx.fillStyle = now - b.t < 0.5 ? colors.recWaveNow : colors.recWave;
+    waveCtx.fillRect(Math.round(x), Math.round(mid - h / 2), barW, Math.round(h));
+  }
+
+  // your marks
+  waveCtx.fillStyle = colors.recMark;
+  for (const m of marks) {
+    const x = Math.round(cx - (now - m) * pps);
+    if (x < -10 * dpr) continue;
+    waveCtx.fillRect(x - dpr, top, 2 * dpr, H - top);
+    waveCtx.beginPath();
+    waveCtx.moveTo(x + dpr, top); waveCtx.lineTo(x + 11 * dpr, top + 4 * dpr); waveCtx.lineTo(x + dpr, top + 8 * dpr);
+    waveCtx.fill();
+  }
+
+  // "now"
+  waveCtx.fillStyle = colors.recPlayhead;
+  waveCtx.fillRect(cx - dpr, top - 4 * dpr, 2 * dpr, H - top + 4 * dpr);
+  waveCtx.beginPath();
+  waveCtx.arc(cx, top - 4 * dpr, 5 * dpr, 0, Math.PI * 2);
+  waveCtx.fill();
 }
 
 function pickRecordingType() {
@@ -1772,7 +1853,24 @@ function pickRecordingType() {
   return ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
 }
 
+function renderRecorder() {
+  const on = Boolean(recorder);
+  const paused = on && Boolean(pausedAt);
+  screens.record.classList.toggle('is-recording', on);
+  screens.record.classList.toggle('is-paused', paused);
+  $('recState').hidden = !on;
+  $('recStateText').textContent = paused ? 'PAUSED' : 'REC';
+  $('recordBtn').setAttribute('aria-label', on ? 'Stop and save' : 'Start recording');
+  $('recordLabel').textContent = on ? 'Stop & save' : 'Record';
+  const canPause = on && typeof recorder.pause === 'function';
+  $('pauseBtn').disabled = !canPause;
+  $('pauseBtn').setAttribute('aria-label', paused ? 'Carry on recording' : 'Pause');
+  $('pauseLabel').textContent = paused ? 'Resume' : 'Pause';
+  $('markBtn').disabled = !on || paused;
+}
+
 async function startRecording() {
+  if (recorder) return;
   if (!navigator.mediaDevices || !window.MediaRecorder) { toast('Recording isn’t available here'); return; }
   try {
     // Music sounds better without the "phone call" clean-up filters.
@@ -1801,42 +1899,81 @@ async function startRecording() {
     levelData = new Float32Array(analyser.fftSize);
   } catch (e) { analyser = null; }
 
-  recordStart = Date.now();
-  screens.record.classList.add('is-recording');
-  $('recordBtn').setAttribute('aria-label', 'Stop recording');
-  $('recordHint').textContent = 'Recording… tap to stop';
-  recordClock = setInterval(() => { $('recordTime').textContent = formatTime((Date.now() - recordStart) / 1000); }, 250);
+  recordStart = performance.now();
+  pausedAt = 0; pausedTotal = 0;
+  waveBars = []; marks = [];
+  $('recordHint').textContent = 'New idea';
+  renderRecorder();
+  tick();
 
+  let barPeak = 0, nextBar = BAR_SECONDS;
   const frame = () => {
     if (!recorder) return;
-    let level = 0;
-    if (analyser) {
-      analyser.getFloatTimeDomainData(levelData);
-      let sum = 0;
-      for (let i = 0; i < levelData.length; i++) sum += levelData[i] * levelData[i];
-      level = Math.min(1, Math.sqrt(sum / levelData.length) * 4);
+    if (!pausedAt) {
+      let level = 0;
+      if (analyser) {
+        analyser.getFloatTimeDomainData(levelData);
+        let peak = 0;
+        for (let i = 0; i < levelData.length; i++) { const v = Math.abs(levelData[i]); if (v > peak) peak = v; }
+        level = Math.min(1, Math.pow(peak, 0.6) * 1.15); // quiet sounds still show
+      }
+      barPeak = Math.max(barPeak, level);
+      const t = elapsed();
+      while (t >= nextBar) { waveBars.push({ t: nextBar, level: barPeak }); barPeak = 0; nextBar += BAR_SECONDS; }
+      if (waveBars.length > 4000) waveBars.splice(0, waveBars.length - 2000);
+      showTime(t);
+      drawWave();
     }
-    levelHistory.unshift(level); levelHistory.pop();
-    drawGrill(level);
     levelLoop = requestAnimationFrame(frame);
   };
   levelLoop = requestAnimationFrame(frame);
 }
 
+function togglePause() {
+  if (!recorder || typeof recorder.pause !== 'function') return;
+  if (pausedAt) {
+    try { recorder.resume(); } catch (e) { return; }
+    pausedTotal += performance.now() - pausedAt;
+    pausedAt = 0;
+    $('recordHint').textContent = 'New idea';
+  } else {
+    try { recorder.pause(); } catch (e) { return; }
+    pausedAt = performance.now();
+    $('recordHint').textContent = 'Paused. Tap Resume to carry on.';
+  }
+  renderRecorder();
+  tick();
+}
+
+function addMark() {
+  if (!recorder || pausedAt) return;
+  const t = elapsed();
+  if (marks.length && t - marks[marks.length - 1] < 0.5) return; // one mark per moment
+  marks.push(t);
+  drawWave();
+  const b = $('markBtn');
+  b.classList.remove('flash'); void b.offsetWidth; b.classList.add('flash');
+  $('recordHint').textContent = `Marked ${formatTime(t).replace(/^0/, '')}`;
+  tick();
+}
+
 function stopRecording() {
-  if (recorder && recorder.state !== 'inactive') recorder.stop();
+  if (!recorder || recorder.state === 'inactive') return;
+  if (pausedAt) { pausedTotal += performance.now() - pausedAt; pausedAt = 0; }
+  recorder.stop();
 }
 
 async function finishRecording(pieces, mime) {
-  const seconds = (Date.now() - recordStart) / 1000;
-  clearInterval(recordClock);
+  const seconds = elapsed();
+  const savedMarks = marks.slice();
   cancelAnimationFrame(levelLoop);
   if (micStream) micStream.getTracks().forEach((t) => t.stop());
   micStream = null; analyser = null; recorder = null;
-  levelHistory.fill(0);
-  screens.record.classList.remove('is-recording');
-  $('recordBtn').setAttribute('aria-label', 'Start recording');
-  drawGrill(0);
+  pausedAt = 0; pausedTotal = 0;
+  waveBars = []; marks = [];
+  renderRecorder();
+  showTime(0);
+  drawWave();
 
   const blob = new Blob(pieces, { type: mime });
   if (!blob.size) { $('recordHint').textContent = 'Nothing was recorded. Tap to try again.'; return; }
@@ -1858,6 +1995,7 @@ async function finishRecording(pieces, mime) {
       pps: info.pps,
       addedAt: Date.now(),
     };
+    if (savedMarks.length) track.marks = savedMarks.map((m) => Math.round(m * 100) / 100);
     tracks.push(track);
     await save();
     wantFacts(track.id);
@@ -1866,10 +2004,11 @@ async function finishRecording(pieces, mime) {
   } catch (e) {
     $('recordHint').textContent = 'Couldn’t save that recording. Is your phone full?';
   }
-  $('recordTime').textContent = '00:00';
 }
 
 $('recordBtn').addEventListener('click', () => (recorder ? stopRecording() : startRecording()));
+$('pauseBtn').addEventListener('click', togglePause);
+$('markBtn').addEventListener('click', addMark);
 
 function renderRecordTarget() {
   if (recordTargetId && !projects.some((p) => p.id === recordTargetId)) recordTargetId = null;
@@ -1877,7 +2016,6 @@ function renderRecordTarget() {
   $('recordTarget').setAttribute('aria-label', `Recording into ${projectOf(recordTargetId).name}. Change`);
 }
 $('recordTarget').addEventListener('click', () => {
-  if (recorder) return;
   const choices = orderedProjects(true);
   openSheet('Save new ideas into', choices.map((p) => ({
     label: p.name,
@@ -2061,7 +2199,8 @@ function readColors() {
   const get = (name) => css.getPropertyValue(name).trim();
   colors = {
     red: get('--red'),
-    grillDot: get('--grill-dot'), grillBg: get('--grill-bg'),
+    recWave: get('--rec-wave'), recWaveNow: get('--rec-wave-now'), recLine: get('--rec-line'),
+    recTick: get('--rec-tick'), recPlayhead: get('--rec-playhead'), recMark: get('--rec-mark'),
   };
 }
 
@@ -2077,7 +2216,7 @@ function applyTheme() {
   document.querySelector('meta[name="theme-color"]').content = dark ? '#141312' : '#ece7e1';
   document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = dark ? 'black-translucent' : 'default';
   readColors();
-  drawGrill(0);
+  drawWave();
 }
 
 function setTheme(choice) {

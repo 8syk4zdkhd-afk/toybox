@@ -97,20 +97,34 @@
     </div>
   </section>
 
-  <!-- ================= RECORD: a blue tape machine ================= -->
+  <!-- ================= RECORD: your sound scrolls past as you record ================= -->
   <section id="recordScreen" class="screen machine blue" aria-label="Record" hidden>
-    <header class="machine-head">
-      <div>
-        <h2 class="machine-title">New idea</h2>
-        <button id="recordTarget" class="machine-sub" type="button">Loose ideas</button>
-      </div>
-    </header>
-    <div class="grill-wrap"><canvas id="grill" class="grill" aria-hidden="true"></canvas></div>
-    <p id="recordTime" class="record-time">00:00</p>
-    <div class="record-ring">
-      <button id="recordBtn" class="record-btn" type="button" aria-label="Start recording"><span class="rec-icon"></span></button>
+    <div class="rec-top">
+      <span id="recState" class="rec-pill" hidden><span class="rec-dot"></span><span id="recStateText">REC</span></span>
+      <button id="recordTarget" class="rec-chip" type="button">Loose ideas</button>
     </div>
-    <p id="recordHint" class="record-hint">Tap to record</p>
+    <p id="recordTime" class="rec-time" aria-live="off">0:00<span class="rec-cs">.00</span></p>
+    <p id="recordHint" class="rec-hint">Tap the red button to record</p>
+    <div class="wave-wrap"><canvas id="wave" class="wave" aria-hidden="true"></canvas></div>
+    <div class="rec-controls">
+      <div class="rec-ctl">
+        <button id="pauseBtn" class="rec-side" type="button" aria-label="Pause" disabled>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg>
+          <svg class="i-resume" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>
+        </button>
+        <span id="pauseLabel" class="rec-ctl-label">Pause</span>
+      </div>
+      <div class="rec-ctl rec-ctl-main">
+        <button id="recordBtn" class="rec-main" type="button" aria-label="Start recording"><span class="rec-icon"></span></button>
+        <span id="recordLabel" class="rec-ctl-label">Record</span>
+      </div>
+      <div class="rec-ctl">
+        <button id="markBtn" class="rec-side" type="button" aria-label="Mark this moment" disabled>
+          <svg class="i-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>
+        </button>
+        <span class="rec-ctl-label">Mark</span>
+      </div>
+    </div>
   </section>
 
   <!-- ================= PLAYER: the project's picture, fading into the controls ================= -->
@@ -137,6 +151,7 @@
         <!-- Where you are in the song. Tap or drag to jump. -->
         <div id="seek" class="seek" role="slider" tabindex="0" aria-label="Song position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div class="seek-track"><div id="seekFill" class="seek-fill"></div></div>
+          <div id="seekMarks" class="seek-marks" aria-hidden="true"></div>
         </div>
         <div class="times">
           <span id="pNow" class="time">00:00</span>

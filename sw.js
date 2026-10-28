@@ -6,7 +6,7 @@
   (Your songs aren't here: they're saved separately and never leave your phone.)
 */
 
-const CACHE = 'toybox-v22';
+const CACHE = 'toybox-v23';
 const FILES = [
   './',
   './index.html',

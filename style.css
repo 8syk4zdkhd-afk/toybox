@@ -24,10 +24,13 @@
   --faint: rgba(18, 18, 18, 0.42);
   --current-bg: #0004ff;  --current-fg: #ffffff;   /* the song that's playing */
   --rec-bg: #0004ff;      --rec-ink: #ffffff;      /* the recorder */
-  --rec-faint: rgba(255, 255, 255, 0.7);
   --rec-soft: rgba(255, 255, 255, 0.78);
-  --rec-ring: #121212;    --rec-btn: #ffffff;
-  --grill-dot: #ffffff;   --grill-bg: rgba(255, 255, 255, 0.1);
+  --rec-chip: rgba(255, 255, 255, 0.16);  --rec-accent: #ffffff;
+  --rec-pill-bg: #ffffff;  --rec-pill-fg: #e0241a;
+  --rec-btn-bg: #ffffff;   --rec-btn-ring: transparent;
+  --rec-wave: rgba(255, 255, 255, 0.55);  --rec-wave-now: #ffffff;
+  --rec-line: rgba(255, 255, 255, 0.22);  --rec-tick: rgba(255, 255, 255, 0.6);
+  --rec-playhead: #ffffff;  --rec-mark: #ffd60a;
   --knob-center: #f6f2ed;
   --dot-on: #121212;      --dot-ahead: rgba(18, 18, 18, 0.5);  --dot-off: rgba(18, 18, 18, 0.13);
   --bar-bg: #121212;      --bar-fg: rgba(246, 242, 237, 0.55);
@@ -42,6 +45,7 @@
   --pl-line: rgba(18, 18, 18, 0.14);  --pl-track: rgba(18, 18, 18, 0.13);
   --pl-accent: #121212;   --pl-accent-ink: #f6f2ed;
   --pl-card: rgba(18, 18, 18, 0.045); --pl-card-line: rgba(18, 18, 18, 0.1);
+  --pl-mark: #0004ff;
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
 
@@ -67,10 +71,13 @@
   --faint: rgba(242, 237, 230, 0.45);
   --current-bg: #4b5bff;  --current-fg: #ffffff;
   --rec-bg: #161514;      --rec-ink: #f2ede6;
-  --rec-faint: #8c97ff;
   --rec-soft: rgba(242, 237, 230, 0.55);
-  --rec-ring: #4b5bff;    --rec-btn: #161514;
-  --grill-dot: #4b5bff;   --grill-bg: rgba(75, 91, 255, 0.1);
+  --rec-chip: #2a2724;    --rec-accent: #8c97ff;
+  --rec-pill-bg: #3a1f1c;  --rec-pill-fg: #ff8a82;
+  --rec-btn-bg: transparent;  --rec-btn-ring: #f2ede6;
+  --rec-wave: rgba(242, 237, 230, 0.5);  --rec-wave-now: #f2ede6;
+  --rec-line: rgba(242, 237, 230, 0.1);  --rec-tick: rgba(242, 237, 230, 0.4);
+  --rec-playhead: #ff3b30;  --rec-mark: #8c97ff;
   --knob-center: #302b27;
   --dot-on: #f2ede6;      --dot-ahead: rgba(242, 237, 230, 0.45);  --dot-off: rgba(242, 237, 230, 0.12);
   --bar-bg: #2a2724;      --bar-fg: rgba(242, 237, 230, 0.55);
@@ -84,6 +91,7 @@
   --pl-line: rgba(255, 255, 255, 0.16);  --pl-track: rgba(255, 255, 255, 0.2);
   --pl-accent: #f4ead8;   --pl-accent-ink: #121110;
   --pl-card: rgba(255, 255, 255, 0.05);  --pl-card-line: rgba(255, 255, 255, 0.1);
+  --pl-mark: #8c97ff;
 }
 
 * { box-sizing: border-box; }
@@ -414,93 +422,134 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 .machine.blue { background: var(--rec-bg); color: var(--rec-ink); }
 .machine.beige { background: var(--beige); }
 
-.machine-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-.machine-titles { min-width: 0; }
-.machine-title {
-  margin: 0;
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.08;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.machine-title.faint { color: var(--faint); }
-.machine-sub { color: var(--rec-faint); }
-.machine-sub {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.08;
-}
-.machine-sub::after {
-  content: "";
-  width: 9px;
-  height: 9px;
-  margin-top: -6px;
-  border-right: 3px solid currentColor;
-  border-bottom: 3px solid currentColor;
-  transform: rotate(45deg);
-}
-
 .plain-btn { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; }
 .plain-btn svg { width: 28px; height: 28px; }
 
-/* ============ Record (blue) ============ */
+/* ============ Record: your sound scrolls past as you record ============ */
 #recordScreen {
-  justify-content: space-between;
-  padding-bottom: calc(var(--safe-bottom) + 92px);
+  align-items: center;
+  padding-left: 0;
+  padding-right: 0;
+  padding-bottom: calc(var(--safe-bottom) + 112px);
 }
-.grill-wrap { display: grid; place-items: center; }
-.grill { width: min(66vw, 280px); height: min(66vw, 280px); }
-
-.record-time {
-  margin: 0;
-  text-align: center;
-  font-size: 44px;
+.rec-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+  min-height: 34px;
+}
+.rec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: var(--rec-pill-bg);
+  color: var(--rec-pill-fg);
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.14em;
+}
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+.is-recording:not(.is-paused) .rec-dot { animation: rec-blink 1.2s steps(2, jump-none) infinite; }
+@keyframes rec-blink { 50% { opacity: 0.25; } }
+.rec-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: var(--rec-chip);
+  color: var(--rec-accent);
+  font-size: 14px;
+  font-weight: 600;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rec-chip::after {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: -4px;
+  border-right: 2.4px solid currentColor;
+  border-bottom: 2.4px solid currentColor;
+  transform: rotate(45deg);
+}
+.rec-time {
+  margin: 30px 0 0;
+  font-size: clamp(60px, 19vw, 76px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  color: var(--rec-ink);
 }
+.rec-cs { font-size: 0.44em; letter-spacing: -0.02em; color: var(--rec-soft); }
+.rec-hint {
+  margin: 10px 0 0;
+  min-height: 20px;
+  padding: 0 24px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--rec-soft);
+}
+.wave-wrap { width: 100%; flex: 1; min-height: 150px; max-height: 280px; margin: 26px 0 16px; }
+.wave { display: block; width: 100%; height: 100%; }
 
-.record-ring {
+.rec-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: clamp(22px, 9vw, 40px);
+}
+.rec-ctl { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.rec-ctl-main { margin-top: -14px; }
+.rec-ctl-label { font-size: 12px; font-weight: 600; color: var(--rec-soft); }
+.rec-side {
   display: grid;
   place-items: center;
-  width: min(54vw, 210px);
-  height: min(54vw, 210px);
-  margin: 0 auto;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: var(--rec-ring);
+  background: var(--rec-chip);
+  color: var(--rec-ink);
+  transition: opacity 0.2s ease, transform 0.15s ease;
 }
-.record-btn {
+.rec-side svg { width: 22px; height: 22px; fill: currentColor; }
+.rec-side .i-mark { fill: none; stroke: var(--rec-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.rec-side .i-resume { display: none; }
+.is-paused .rec-side .i-pause { display: none; }
+.is-paused .rec-side .i-resume { display: block; }
+.rec-side:disabled { opacity: 0.35; cursor: default; }
+.rec-side:not(:disabled):active { transform: scale(0.92); }
+.rec-side.flash { animation: mark-flash 0.4s ease-out; }
+@keyframes mark-flash { from { background: var(--rec-accent); } }
+.rec-main {
   display: grid;
   place-items: center;
-  width: 48%;
-  height: 48%;
+  width: 92px;
+  height: 92px;
   border-radius: 50%;
-  background: var(--rec-btn);
+  background: var(--rec-btn-bg);
+  box-shadow: inset 0 0 0 4px var(--rec-btn-ring);
+  transition: transform 0.15s ease;
 }
+.rec-main:active { transform: scale(0.94); }
 .rec-icon {
-  width: 36%;
-  height: 36%;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: var(--red);
-  transition: border-radius 0.2s ease, transform 0.2s ease;
+  transition: border-radius 0.2s ease, transform 0.2s ease, width 0.2s ease, height 0.2s ease;
 }
-.is-recording .rec-icon { border-radius: 14%; transform: scale(0.9); }
-/* While recording: a flat red ring around the button, with a gap. */
-.is-recording .record-ring { box-shadow: 0 0 0 6px var(--rec-bg), 0 0 0 11px var(--red); }
-
-.record-hint { margin: 0; text-align: center; font-size: 15px; color: var(--rec-soft); }
+.is-recording .rec-icon { width: 32px; height: 32px; border-radius: 7px; }
 
 /* ============ Player: the project's picture, fading into the controls ============ */
 #playerScreen {
@@ -602,6 +651,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 
 /* The progress bar */
 .seek {
+  position: relative;
   margin-top: 22px;
   padding: 10px 0;
   touch-action: none;
@@ -612,6 +662,17 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   border-radius: 999px;
   background: var(--pl-track);
   overflow: hidden;
+}
+/* Marks you tapped while recording: little flags above the bar */
+.seek-marks { position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; }
+.seek-mark {
+  position: absolute;
+  top: 1px;
+  width: 3px;
+  height: 25px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--pl-mark);
 }
 .seek-fill {
   height: 100%;
@@ -1120,6 +1181,7 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   .screen.enter-right, .screen.enter-up, .sheet-backdrop:not([hidden]) .action-sheet { animation: none; }
   .mini.is-playing .mini-reel { animation: none; }
   .plus-btn, .plus-btn svg, .tool-tile, .player-tools-body, .ptools-chev { transition-duration: 0.01s !important; }
+  .is-recording .rec-dot, .rec-side.flash { animation: none !important; }
   .plus-btn:active, .tool:active .tool-tile { transform: none; }
 }
 
