@@ -181,6 +181,11 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
   flex-direction: column;
 }
 .screen.paper { background: var(--paper); }
+#projectScreen { touch-action: pan-y; } /* swipe right to go back */
+/* the screen peeking out underneath while you swipe one away */
+.screen.under { z-index: 0; }
+#projectScreen, #playerScreen { z-index: 1; will-change: transform; }
+.player-art, .player-title, .player-sub { will-change: transform; }
 
 .scroll {
   flex: 1;
@@ -500,7 +505,8 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 /* ============ Player: the project's picture, fading into the controls ============ */
 #playerScreen {
   overflow-y: auto;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: none; /* pulling down at the top closes the player instead of bouncing */
+  touch-action: pan-y;        /* sideways swipes change the song */
   overflow-x: hidden;
   scrollbar-width: none;
   background: var(--pl-bg);
@@ -1005,6 +1011,81 @@ svg { width: 22px; height: 22px; fill: currentColor; flex-shrink: 0; }
 .sheet-actions button[aria-checked="true"] { font-weight: 700; }
 .sheet-actions button[aria-checked="true"]::after { content: "  \2713"; }
 .sheet-cancel { width: 100%; margin-top: 8px; border-radius: 16px; border-top: 0; font-weight: 600; }
+
+/* BPM and key panels */
+.fact-sheet { color: var(--ink); }
+.fact-sheet .sheet-title { border-radius: 16px 16px 0 0; }
+.fact-sheet-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 6px 18px 18px;
+  background: var(--paper-hi);
+  border-radius: 0 0 16px 16px;
+}
+.fact-sheet-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.fact-sheet-buttons button {
+  height: 56px;
+  border-radius: 16px;
+  background: var(--paper-hi);
+  font-size: 18px;
+}
+.fact-sheet-buttons .fs-save { background: var(--ink); color: var(--paper-hi); font-weight: 600; }
+.sheet-backdrop:not([hidden]) .fact-sheet { animation: enter-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.bpm-big {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+.bpm-value { font-size: 56px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.bpm-unit { font-size: 15px; font-weight: 600; letter-spacing: 0.16em; color: var(--ink-soft); }
+.fs-row { display: flex; justify-content: center; gap: 10px; }
+.fs-chip {
+  min-width: 72px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px var(--ink-line);
+  font-size: 16px;
+  font-weight: 600;
+}
+.fs-chip:active { background: var(--ink-line); }
+.tap-pad {
+  height: 120px;
+  border-radius: 22px;
+  background: var(--ink);
+  color: var(--paper-hi);
+  font-size: 18px;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+.tap-pad.flash { animation: tap-flash 0.18s ease-out; }
+@keyframes tap-flash { from { background: var(--blue); transform: scale(0.98); } }
+.fs-link { align-self: center; padding: 6px 10px; font-size: 15px; color: var(--ink-soft); text-decoration: underline; text-underline-offset: 3px; }
+.fs-segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--ink-line);
+}
+.fs-segment button { height: 40px; border-radius: 999px; font-size: 16px; font-weight: 600; color: var(--ink-soft); }
+.fs-segment button[aria-checked="true"] { background: var(--paper-hi); color: var(--ink); box-shadow: 0 0 0 1px var(--ink-line); }
+.key-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.key-note {
+  height: 52px;
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1.5px var(--ink-line);
+  font-size: 19px;
+  font-weight: 600;
+}
+.key-note[aria-pressed="true"] { background: var(--ink); color: var(--paper-hi); box-shadow: none; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet-backdrop:not([hidden]) .fact-sheet, .tap-pad.flash { animation: none; }
+}
 
 /* Little messages float just above the dock, so they never cover a title. */
 .toast {

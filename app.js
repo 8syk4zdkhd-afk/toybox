@@ -220,11 +220,12 @@ function show(name, motion) {
 }
 
 $('backBtn').addEventListener('click', () => { renderLibrary(); show('library'); });
-$('closePlayer').addEventListener('click', () => {
+function closePlayer() {
   const back = screenBeforePlayer === 'player' ? 'library' : screenBeforePlayer;
   if (back === 'project') renderProject(); else renderLibrary();
   show(back);
-});
+}
+$('closePlayer').addEventListener('click', closePlayer);
 
 // ===================================================================
 // 4b. The dock and the + tools
@@ -946,6 +947,10 @@ function displayTitle(track) {
   return before || name;
 }
 
+// Bump this when the listening gets better, so songs are listened to again.
+const FACTS_VERSION = 2;
+const hasFreshFacts = (track) => Boolean(track && track.facts && track.facts.v === FACTS_VERSION);
+
 function songFacts(track) {
   const detected = track.facts || {};
   const guessed = guessVersion(track.name);
@@ -953,7 +958,7 @@ function songFacts(track) {
     version: track.version || (guessed ? guessed.label : ''),
     bpm: track.bpm != null ? track.bpm : detected.bpm,
     key: track.key || detected.key || '',
-    listening: !track.facts && factsPending.has(track.id),
+    listening: !hasFreshFacts(track) && factsPending.has(track.id) && !track.facts,
   };
 }
 
@@ -981,41 +986,151 @@ function tidyKey(text) {
   return `${letter}${acc} ${minor ? 'minor' : 'major'}`;
 }
 
-async function editFact(which) {
+async function editVersion() {
   const track = trackById(nowId);
   if (!track) { toast('Pick a song first'); return; }
-  const f = songFacts(track);
-  if (which === 'version') {
-    const v = prompt('Version (like Mix 04). Leave empty to read it from the name.', f.version);
-    if (v === null) return;
-    if (v.trim()) track.version = v.trim(); else delete track.version;
-  }
-  if (which === 'bpm') {
-    const v = prompt('BPM. Leave empty to let ToyBox listen again.', f.bpm != null ? String(f.bpm) : '');
-    if (v === null) return;
-    if (!v.trim()) { delete track.bpm; delete track.facts; wantFacts(track.id, true); }
-    else {
-      const n = parseFloat(v.replace(',', '.'));
-      if (!isFinite(n) || n < 20 || n > 400) { toast('Type a number, like 92'); return; }
-      track.bpm = Math.round(n * 10) / 10;
-    }
-  }
-  if (which === 'key') {
-    const v = prompt('Key (like F minor or Bb). Leave empty to let ToyBox listen again.', f.key);
-    if (v === null) return;
-    if (!v.trim()) { delete track.key; delete track.facts; wantFacts(track.id, true); }
-    else {
-      const key = tidyKey(v);
-      if (!key) { toast('Try something like F minor or Bb major'); return; }
-      track.key = key;
-    }
-  }
+  const v = prompt('Version (like Mix 04). Leave empty to read it from the name.', songFacts(track).version);
+  if (v === null) return;
+  if (v.trim()) track.version = v.trim(); else delete track.version;
   await save();
   renderPlayer();
 }
-$('factVersion').addEventListener('click', () => editFact('version'));
-$('factBpm').addEventListener('click', () => editFact('bpm'));
-$('factKey').addEventListener('click', () => editFact('key'));
+
+// A small panel that slides up from the bottom (used for BPM and key).
+function openFactSheet(title, build) {
+  closeFactSheet();
+  const sheet = document.createElement('div');
+  sheet.id = 'factSheet';
+  sheet.className = 'sheet-backdrop';
+  sheet.innerHTML = `
+    <div class="fact-sheet" role="dialog" aria-modal="true" aria-label="${title}">
+      <p class="sheet-title">${title}</p>
+      <div class="fact-sheet-body"></div>
+      <div class="fact-sheet-buttons">
+        <button class="fs-cancel" type="button">Cancel</button>
+        <button class="fs-save" type="button">Save</button>
+      </div>
+    </div>`;
+  sheet.addEventListener('click', (e) => { if (e.target === sheet) closeFactSheet(); });
+  sheet.querySelector('.fs-cancel').addEventListener('click', closeFactSheet);
+  app.append(sheet);
+  build(sheet.querySelector('.fact-sheet-body'), sheet.querySelector('.fs-save'));
+}
+function closeFactSheet() {
+  const old = document.getElementById('factSheet');
+  if (old) old.remove();
+}
+
+// BPM: halve, double, tap along to the beat, or let ToyBox listen again.
+function editBpm() {
+  const track = trackById(nowId);
+  if (!track) { toast('Pick a song first'); return; }
+  let value = songFacts(track).bpm;
+  let taps = [];
+  openFactSheet('BPM', (body, saveBtn) => {
+    body.innerHTML = `
+      <p class="bpm-big" aria-live="polite"><span class="bpm-value"></span><span class="bpm-unit">BPM</span></p>
+      <div class="fs-row">
+        <button class="fs-chip" type="button" data-half aria-label="Half">½×</button>
+        <button class="fs-chip" type="button" data-double aria-label="Double">2×</button>
+        <button class="fs-chip" type="button" data-type>Type</button>
+      </div>
+      <button class="tap-pad" type="button">Tap along to the beat</button>
+      <button class="fs-link" type="button" data-listen>Let ToyBox listen again</button>`;
+    const out = body.querySelector('.bpm-value');
+    const show = () => { out.textContent = value != null ? String(Math.round(value * 10) / 10) : '—'; };
+    show();
+    body.querySelector('[data-half]').addEventListener('click', () => { if (value) { value = Math.round(value / 2 * 10) / 10; show(); tick(); } });
+    body.querySelector('[data-double]').addEventListener('click', () => { if (value) { value = Math.round(value * 2 * 10) / 10; show(); tick(); } });
+    body.querySelector('[data-type]').addEventListener('click', () => {
+      const v = prompt('BPM', value != null ? String(value) : '');
+      if (v === null || !v.trim()) return;
+      const n = parseFloat(v.replace(',', '.'));
+      if (!isFinite(n) || n < 20 || n > 400) { toast('Type a number, like 92'); return; }
+      value = Math.round(n * 10) / 10; show();
+    });
+    const pad = body.querySelector('.tap-pad');
+    pad.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const now = performance.now();
+      if (taps.length && now - taps[taps.length - 1] > 2000) taps = []; // a long pause starts over
+      taps.push(now);
+      if (taps.length > 9) taps.shift();
+      if (taps.length >= 3) {
+        const gaps = [];
+        for (let i = 1; i < taps.length; i++) gaps.push(taps[i] - taps[i - 1]);
+        gaps.sort((a, b) => a - b);
+        const mid = gaps[Math.floor(gaps.length / 2)]; // the middle gap ignores one sloppy tap
+        const steady = gaps.filter((g) => Math.abs(g - mid) < mid * 0.25);
+        const avg = steady.reduce((a, b) => a + b, 0) / steady.length;
+        value = Math.round(60000 / avg);
+        show();
+      }
+      pad.textContent = taps.length < 3 ? 'Keep tapping…' : 'Keep tapping, then Save';
+      pad.classList.remove('flash'); void pad.offsetWidth; pad.classList.add('flash');
+      tick();
+    });
+    body.querySelector('[data-listen]').addEventListener('click', async () => {
+      delete track.bpm; delete track.facts;
+      closeFactSheet();
+      await save();
+      wantFacts(track.id, true);
+      renderPlayer();
+      toast('Listening…');
+    });
+    saveBtn.addEventListener('click', async () => {
+      if (value != null) track.bpm = value;
+      closeFactSheet();
+      await save();
+      renderPlayer();
+    });
+  });
+}
+
+// Key: pick the note and major or minor.
+const KEY_NOTES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+function editKey() {
+  const track = trackById(nowId);
+  if (!track) { toast('Pick a song first'); return; }
+  const current = songFacts(track).key || '';
+  let [note, mode] = current.split(' ');
+  if (!KEY_NOTES.includes(note)) note = null;
+  if (mode !== 'major' && mode !== 'minor') mode = 'minor';
+  openFactSheet('Key', (body, saveBtn) => {
+    body.innerHTML = `
+      <div class="fs-segment" role="radiogroup" aria-label="Major or minor">
+        <button type="button" role="radio" data-mode="major">Major</button>
+        <button type="button" role="radio" data-mode="minor">Minor</button>
+      </div>
+      <div class="key-grid">${KEY_NOTES.map((n) => `<button type="button" class="key-note" data-note="${n}">${n}</button>`).join('')}</div>
+      <button class="fs-link" type="button" data-listen>Let ToyBox listen again</button>`;
+    const paint = () => {
+      body.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === mode)));
+      body.querySelectorAll('[data-note]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.note === note)));
+    };
+    paint();
+    body.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.mode; paint(); tick(); }));
+    body.querySelectorAll('[data-note]').forEach((b) => b.addEventListener('click', () => { note = b.dataset.note; paint(); tick(); }));
+    body.querySelector('[data-listen]').addEventListener('click', async () => {
+      delete track.key; delete track.facts;
+      closeFactSheet();
+      await save();
+      wantFacts(track.id, true);
+      renderPlayer();
+      toast('Listening…');
+    });
+    saveBtn.addEventListener('click', async () => {
+      if (note) track.key = `${note} ${mode}`;
+      closeFactSheet();
+      await save();
+      renderPlayer();
+    });
+  });
+}
+
+$('factVersion').addEventListener('click', editVersion);
+$('factBpm').addEventListener('click', editBpm);
+$('factKey').addEventListener('click', editKey);
 
 // Listening for tempo and key happens in the background (facts-worker.js), one song at a time.
 const factsQueue = [];
@@ -1024,16 +1139,18 @@ let factsBusy = false;
 let factsWorker = null;
 let factsJob = 0;
 const factsReplies = new Map();
+const factsUrgent = new Set(); // songs you're playing: fine to download them to listen
 
 function wantFacts(id, soon) {
   const track = trackById(id);
-  if (track && track.facts) return;
+  if (!track || hasFreshFacts(track)) return;
   if (factsPending.has(id)) {
     const at = factsQueue.indexOf(id);
     if (soon && at > 0) { factsQueue.splice(at, 1); factsQueue.unshift(id); }
     return;
   }
   factsPending.add(id);
+  if (soon) factsUrgent.add(id);
   if (soon) factsQueue.unshift(id); else factsQueue.push(id);
   if (id === nowId) renderFacts(trackById(id));
   runFacts();
@@ -1045,10 +1162,11 @@ async function runFacts() {
   while (factsQueue.length) {
     const id = factsQueue.shift();
     const track = trackById(id);
-    if (!track || track.facts) { factsPending.delete(id); continue; }
+    if (!track || hasFreshFacts(track)) { factsPending.delete(id); continue; }
     let facts = { bpm: null, key: null };
     try {
       let blob = await Store.getFile(track.file);
+      if (!blob && !factsUrgent.has(id)) { factsPending.delete(id); continue; } // not on this phone yet
       if (!blob) {
         const url = await fileUrlAnywhere(track.file);
         if (url) blob = await (await fetch(url)).blob();
@@ -1056,9 +1174,10 @@ async function runFacts() {
       if (blob) facts = await listenForFacts(blob);
     } catch (e) { /* couldn't listen: leave them empty, you can type them in */ }
     factsPending.delete(id);
+    factsUrgent.delete(id);
     const still = trackById(id);
     if (still) {
-      still.facts = facts;
+      still.facts = { ...facts, v: FACTS_VERSION };
       await save();
       if (id === nowId) renderFacts(still);
     }
@@ -1122,6 +1241,13 @@ async function deleteTrack(track) {
 // ===================================================================
 // 9. The player
 // ===================================================================
+// Where the music is playing from: the song's own file (rate 1), or a smooth
+// sped-up/slowed-down copy made by stretch-worker.js (rate = that copy's speed).
+let source = { url: null, rate: 1 };
+let originalUrl = null;
+const songPos = () => (audio.currentTime || 0) * source.rate;   // seconds into the original song
+function setSongPos(t) { audio.currentTime = Math.max(0, t / source.rate); }
+
 async function playTrack(id, list) {
   const track = trackById(id);
   if (!track) return;
@@ -1131,6 +1257,8 @@ async function playTrack(id, list) {
   if (!url) { toast('That song’s file is missing'); return; }
   wantFacts(id, true);
   if (nowId !== id) return; // you picked another song while this one downloaded
+  originalUrl = url;
+  source = { url, rate: 1 };
   audio.src = url;
   applySpeed();
   try { await audio.play(); } catch (e) { /* the play button will show; tap to start */ }
@@ -1154,11 +1282,11 @@ function skip(step) {
   const here = queue.indexOf(nowId);
   const next = queue[here + step];
   if (next) playTrack(next);
-  else if (step > 0) { audio.pause(); audio.currentTime = 0; }
+  else if (step > 0) { audio.pause(); setSongPos(0); }
 }
 
 function previous() {
-  if (audio.currentTime > 3) audio.currentTime = 0;
+  if (songPos() > 3) setSongPos(0);
   else skip(-1);
 }
 
@@ -1167,12 +1295,14 @@ function stopPlayer() {
   audio.removeAttribute('src');
   audio.load();
   nowId = null;
+  source = { url: null, rate: 1 };
+  originalUrl = null;
   if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
   renderPlayer();
 }
 
 function songLength() {
-  if (isFinite(audio.duration) && audio.duration > 0) return audio.duration;
+  if (isFinite(audio.duration) && audio.duration > 0) return audio.duration * source.rate;
   const t = trackById(nowId);
   return (t && t.duration) || 0;
 }
@@ -1203,7 +1333,7 @@ async function renderPlayerArt(track) {
 
 function updateClock() {
   const total = songLength();
-  const now = Math.min(audio.currentTime || 0, total || Infinity);
+  const now = Math.min(songPos(), total || Infinity);
   $('pNow').textContent = formatTime(now);
   $('pTotal').textContent = formatTime(total);
   drawProgress();
@@ -1212,7 +1342,7 @@ function updateClock() {
 // The cream (or black) bar fills up as the song plays.
 function drawProgress() {
   const total = songLength();
-  const now = Math.min(audio.currentTime || 0, total || Infinity);
+  const now = Math.min(songPos(), total || Infinity);
   const p = total ? Math.max(0, Math.min(1, now / total)) : 0;
   $('seekFill').style.width = (p * 100).toFixed(2) + '%';
   const seek = $('seek');
@@ -1221,11 +1351,21 @@ function drawProgress() {
 }
 
 function applySpeed() {
-  audio.playbackRate = speed;
-  audio.defaultPlaybackRate = speed;
+  const wantSmooth = Boolean(nowId) && !tapeMode && Math.abs(speed - 1) > 0.001;
+  const ready = wantSmooth ? smoothCache.get(smoothKey(nowId, speed)) : null;
+  if (ready) {
+    useSource(ready.url, speed);       // the smooth copy is ready: play that, at normal rate
+  } else {
+    if (source.rate !== 1 && originalUrl) useSource(originalUrl, 1); // back to the song's own file
+    if (wantSmooth) scheduleSmooth();  // meanwhile the phone changes the speed itself
+  }
+  const rate = source.rate === 1 ? speed : 1;
+  audio.playbackRate = rate;
+  audio.defaultPlaybackRate = rate;
   audio.preservesPitch = !tapeMode;
   audio.webkitPreservesPitch = !tapeMode;
   audio.mozPreservesPitch = !tapeMode;
+  renderSmoothState();
   const label = speed.toFixed(2) + '×';
   $('speedOut').textContent = label;
   $('speedKnob').style.transform = `rotate(${(speed - 1) * 270}deg)`;
@@ -1242,6 +1382,120 @@ function applySpeed() {
   setPosition();
 }
 
+// ---------- Smooth speed changes ----------
+// The phone's own speed change can sound watery. So when you pick a speed (and Tape is off),
+// ToyBox makes a smooth copy of the song at that speed in the background, then swaps to it
+// right where you are. The last couple of copies are kept, so going back and forth is instant.
+const smoothCache = new Map(); // "songId@0.85" -> { url }
+const smoothKey = (id, rate) => `${id}@${rate.toFixed(2)}`;
+let smoothTimer = null;
+let smoothJob = null;        // { key, progress }
+let smoothWorker = null;
+let smoothPendingSwitch = false;
+let switchingSource = false;
+
+function useSource(url, rate) {
+  if (!url || source.url === url) return;
+  const pos = songPos();
+  const wasPlaying = !audio.paused;
+  switchingSource = true;
+  source = { url, rate };
+  audio.src = url;
+  const r = rate === 1 ? speed : 1;
+  audio.defaultPlaybackRate = r;
+  audio.playbackRate = r;
+  const ready = () => {
+    audio.removeEventListener('loadedmetadata', ready);
+    try { audio.currentTime = Math.max(0, pos / rate); } catch (e) { /* not seekable yet */ }
+    audio.playbackRate = r;
+    if (wasPlaying) audio.play().catch(() => {});
+    switchingSource = false;
+    updateClock();
+    setPosition();
+  };
+  audio.addEventListener('loadedmetadata', ready);
+}
+
+function scheduleSmooth() {
+  clearTimeout(smoothTimer);
+  smoothTimer = setTimeout(makeSmooth, 700); // wait until you stop turning the knob
+}
+
+function renderSmoothState() {
+  const sub = document.querySelector('.ptools-sub');
+  if (!sub) return;
+  const x = speed.toFixed(2) + '×';
+  let text = 'Speed / Scrub';
+  if (Math.abs(speed - 1) > 0.001) {
+    if (tapeMode) text = `Speed ${x} · tape`;
+    else if (source.rate !== 1) text = `Speed ${x} · smooth`;
+    else if (smoothJob && nowId && smoothJob.key === smoothKey(nowId, speed)) text = `Speed ${x} · smoothing ${Math.round(smoothJob.progress * 100)}%`;
+    else text = `Speed ${x}`;
+  }
+  sub.textContent = text;
+}
+
+async function makeSmooth() {
+  const id = nowId, rate = speed;
+  if (!id || tapeMode || Math.abs(rate - 1) < 0.001 || !window.Worker) return;
+  const key = smoothKey(id, rate);
+  if (smoothCache.has(key)) { applySpeed(); return; }
+  if (smoothJob && smoothJob.key === key) return; // already on it
+  if (smoothWorker) { smoothWorker.terminate(); smoothWorker = null; } // stop an older copy
+  const job = { key, progress: 0 };
+  smoothJob = job;
+  renderSmoothState();
+  try {
+    const track = trackById(id);
+    let blob = await Store.getFile(track.file);
+    if (!blob) {
+      const url = await fileUrlAnywhere(track.file);
+      if (url) blob = await (await fetch(url)).blob();
+    }
+    if (!blob || smoothJob !== job) return;
+    const ctx = getAudioContext();
+    let buffer = await new Promise(async (resolve, reject) => ctx.decodeAudioData(await blob.arrayBuffer(), resolve, reject));
+    if (smoothJob !== job) return;
+    const channels = [];
+    for (let c = 0; c < Math.min(2, buffer.numberOfChannels); c++) channels.push(new Float32Array(buffer.getChannelData(c)));
+    const sampleRate = buffer.sampleRate;
+    buffer = null; // let the phone free it
+    const parts = await new Promise((resolve, reject) => {
+      smoothWorker = new Worker('stretch-worker.js');
+      smoothWorker.onmessage = (e) => {
+        if (e.data.progress != null) { job.progress = e.data.progress; renderSmoothState(); return; }
+        if (e.data.error) reject(new Error(e.data.error)); else resolve(e.data.wav);
+      };
+      smoothWorker.onerror = (e) => reject(e);
+      smoothWorker.postMessage({ id: 1, channels, sampleRate, rate }, channels.map((ch) => ch.buffer));
+    });
+    if (smoothWorker) { smoothWorker.terminate(); smoothWorker = null; }
+    if (smoothJob !== job) return;
+    smoothJob = null;
+    const url = URL.createObjectURL(new Blob(parts, { type: 'audio/wav' }));
+    smoothCache.set(key, { url });
+    // keep only the two newest copies
+    while (smoothCache.size > 2) {
+      const [oldKey, old] = smoothCache.entries().next().value;
+      if (old.url === source.url) break;
+      URL.revokeObjectURL(old.url);
+      smoothCache.delete(oldKey);
+    }
+    if (nowId === id && Math.abs(speed - rate) < 0.001 && !tapeMode) {
+      if (document.visibilityState === 'visible') applySpeed();
+      else smoothPendingSwitch = true; // swap when you come back (no hiccups while the screen is off)
+    }
+    renderSmoothState();
+  } catch (e) {
+    if (smoothJob === job) smoothJob = null;
+    if (smoothWorker) { smoothWorker.terminate(); smoothWorker = null; }
+    renderSmoothState();
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && smoothPendingSwitch) { smoothPendingSwitch = false; applySpeed(); }
+});
+
 $('playBtn').addEventListener('click', togglePlay);
 $('prevBtn').addEventListener('click', previous);
 $('nextBtn').addEventListener('click', () => skip(1));
@@ -1254,8 +1508,8 @@ $('tapeBtn').addEventListener('click', () => {
 
 let lastPositionSent = 0;
 audio.addEventListener('play', () => { renderPlayer(); renderMini(); refreshSongRows(); startProgressLoop(); setPlaybackState(); });
-audio.addEventListener('pause', () => { renderPlayer(); renderMini(); refreshSongRows(); setPlaybackState(); });
-audio.addEventListener('ended', () => skip(1));
+audio.addEventListener('pause', () => { if (switchingSource) return; renderPlayer(); renderMini(); refreshSongRows(); setPlaybackState(); });
+audio.addEventListener('ended', () => { if (!switchingSource) skip(1); });
 audio.addEventListener('loadedmetadata', () => { updateClock(); setPosition(); });
 audio.addEventListener('ratechange', setPosition);
 audio.addEventListener('seeked', setPosition);
@@ -1299,7 +1553,7 @@ function startProgressLoop() {
 function seekTo(seconds) {
   const total = songLength();
   if (!nowId || !total) return;
-  audio.currentTime = Math.max(0, Math.min(total - 0.05, seconds));
+  setSongPos(Math.max(0, Math.min(total - 0.05, seconds)));
   updateClock();
 }
 
@@ -1322,8 +1576,8 @@ const endSeek = () => { if (!seekDragging) return; seekDragging = false; scrubbi
 seekBar.addEventListener('pointerup', endSeek);
 seekBar.addEventListener('pointercancel', endSeek);
 seekBar.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowRight') { seekTo(audio.currentTime + 5); e.preventDefault(); }
-  if (e.key === 'ArrowLeft') { seekTo(audio.currentTime - 5); e.preventDefault(); }
+  if (e.key === 'ArrowRight') { seekTo(songPos() + 5); e.preventDefault(); }
+  if (e.key === 'ArrowLeft') { seekTo(songPos() - 5); e.preventDefault(); }
 });
 
 // The Tools pill opens into the speed knob and scrub wheel.
@@ -1394,7 +1648,7 @@ jog.addEventListener('pointermove', (e) => {
   jogLast = a;
   jogAngle += delta;
   jog.style.transform = `rotate(${jogAngle}deg)`;
-  seekTo(audio.currentTime + (delta / 360) * 8);
+  seekTo(songPos() + (delta / 360) * 8);
   const ticks = Math.floor(jogAngle / 30);
   if (ticks !== jogTicks) { jogTicks = ticks; tick(); }
 });
@@ -1402,8 +1656,8 @@ const endJog = () => { jogLast = null; scrubbing = false; setPosition(); };
 jog.addEventListener('pointerup', endJog);
 jog.addEventListener('pointercancel', endJog);
 jog.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowRight') { seekTo(audio.currentTime + 5); e.preventDefault(); }
-  if (e.key === 'ArrowLeft') { seekTo(audio.currentTime - 5); e.preventDefault(); }
+  if (e.key === 'ArrowRight') { seekTo(songPos() + 5); e.preventDefault(); }
+  if (e.key === 'ArrowLeft') { seekTo(songPos() - 5); e.preventDefault(); }
 });
 
 window.addEventListener('resize', () => {
@@ -1453,8 +1707,8 @@ function setPosition() {
   try {
     navigator.mediaSession.setPositionState({
       duration,
-      playbackRate: audio.playbackRate || 1,
-      position: Math.min(audio.currentTime || 0, duration),
+      playbackRate: source.rate !== 1 ? source.rate : (audio.playbackRate || 1),
+      position: Math.min(songPos(), duration),
     });
   } catch (e) { /* ignore odd numbers */ }
 }
@@ -1465,8 +1719,8 @@ if ('mediaSession' in navigator) {
     pause: () => audio.pause(),
     previoustrack: previous,
     nexttrack: () => skip(1),
-    seekbackward: (d) => seekTo(audio.currentTime - ((d && d.seekOffset) || 10)),
-    seekforward: (d) => seekTo(audio.currentTime + ((d && d.seekOffset) || 10)),
+    seekbackward: (d) => seekTo(songPos() - ((d && d.seekOffset) || 10)),
+    seekforward: (d) => seekTo(songPos() + ((d && d.seekOffset) || 10)),
     seekto: (d) => { if (d && d.seekTime != null) seekTo(d.seekTime); },
   };
   for (const [action, fn] of Object.entries(handlers)) {
@@ -2126,6 +2380,162 @@ function setUpAccount() {
 }
 
 // ===================================================================
+// Swipes
+// • On a project's page: swipe right to go back to your projects.
+// • In the player: swipe down to close it, swipe left for the next song,
+//   swipe right for the song before.
+// The screen follows your finger, and springs back if you don't swipe far enough.
+// ===================================================================
+let swipedAt = 0; // a swipe shouldn't also count as a tap on whatever was under your finger
+document.addEventListener('click', (e) => {
+  if (performance.now() - swipedAt < 350) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+
+function onSwipe(el, h) {
+  let s = null;
+  el.addEventListener('touchstart', (e) => {
+    s = null;
+    if (e.touches.length !== 1 || (h.ignore && h.ignore(e.target))) return;
+    const t = e.touches[0];
+    const now = performance.now();
+    s = { x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY, t: now, vx: 0, vy: 0, axis: null };
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x0, dy = t.clientY - s.y0;
+    if (!s.axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      s.axis = h.pick(dx, dy) || 'none';
+      if (s.axis !== 'none') h.start(s.axis);
+    }
+    if (s.axis === 'none') return;
+    if (e.cancelable) e.preventDefault();
+    const now = performance.now();
+    const dt = Math.max(1, now - s.t);
+    s.vx = 0.7 * s.vx + 0.3 * ((t.clientX - s.x) / dt);
+    s.vy = 0.7 * s.vy + 0.3 * ((t.clientY - s.y) / dt);
+    s.x = t.clientX; s.y = t.clientY; s.t = now;
+    h.move(s.axis, dx, dy);
+  }, { passive: false });
+  const finish = (cancelled) => {
+    if (s && s.axis && s.axis !== 'none') {
+      swipedAt = performance.now();
+      h.end(s.axis, s.x - s.x0, s.y - s.y0, cancelled ? 0 : s.vx, cancelled ? 0 : s.vy, cancelled);
+    }
+    s = null;
+  };
+  el.addEventListener('touchend', () => finish(false));
+  el.addEventListener('touchcancel', () => finish(true));
+}
+
+// Slide something to a spot, then call done.
+function glide(el, transform, ms, done) {
+  if (calmMotion()) ms = 0;
+  el.style.transition = ms ? `transform ${ms}ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity ${ms}ms ease` : 'none';
+  el.style.transform = transform;
+  const end = () => { el.style.transition = ''; if (done) done(); };
+  if (ms) setTimeout(end, ms); else end();
+}
+
+// ---------- Project page: swipe right to go back ----------
+onSwipe(screens.project, {
+  ignore: (t) => Boolean(t.closest('.ra-handle')),
+  pick: (dx, dy) => (dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.2 ? 'back' : null),
+  start() {
+    screens.library.hidden = false; // peek at your projects underneath
+    screens.library.classList.add('under');
+  },
+  move(axis, dx) {
+    const w = app.clientWidth;
+    const x = Math.max(0, dx);
+    screens.project.style.transition = 'none';
+    screens.project.style.transform = `translateX(${x}px)`;
+    screens.library.style.transform = `translateX(${(-0.25 * (w - x)).toFixed(1)}px)`;
+  },
+  end(axis, dx, dy, vx) {
+    const w = app.clientWidth;
+    const go = dx > w * 0.35 || (vx > 0.45 && dx > 30);
+    glide(screens.library, go ? 'translateX(0)' : `translateX(${-0.25 * w}px)`, 240);
+    glide(screens.project, go ? `translateX(${w}px)` : 'translateX(0)', 240, () => {
+      screens.project.style.transform = '';
+      screens.library.style.transform = '';
+      screens.library.classList.remove('under');
+      if (go) { renderLibrary(); show('library'); tick(); }
+      else screens.library.hidden = true;
+    });
+  },
+});
+
+// ---------- Player: down to close, left/right to change song ----------
+const playerFace = () => [$('pArt'), $('pTitle'), $('pSub')];
+onSwipe(screens.player, {
+  ignore: (t) => Boolean(t.closest('#seek, .knob, .jog, .player-tools-body, .tap-pad')),
+  pick(dx, dy) {
+    if (dy > 0 && Math.abs(dy) > Math.abs(dx) * 1.2 && screens.player.scrollTop <= 0) return 'down';
+    if (Math.abs(dx) > Math.abs(dy) * 1.2 && nowId) return 'side';
+    return null;
+  },
+  start(axis) {
+    if (axis === 'down') {
+      const under = screens[screenBeforePlayer === 'player' ? 'library' : screenBeforePlayer] || screens.library;
+      under.hidden = false;
+      under.classList.add('under');
+    }
+  },
+  move(axis, dx, dy) {
+    if (axis === 'down') {
+      screens.player.style.transition = 'none';
+      screens.player.style.transform = `translateY(${Math.max(0, dy)}px)`;
+    } else {
+      const atEnd = (dx < 0 && !queue[queue.indexOf(nowId) + 1]) || (dx > 0 && !queue[queue.indexOf(nowId) - 1]);
+      const x = atEnd ? dx * 0.25 : dx * 0.85; // resist when there's no song that way
+      playerFace().forEach((el) => {
+        el.style.transition = 'none';
+        el.style.transform = `translateX(${x}px)`;
+        el.style.opacity = String(1 - Math.min(0.6, Math.abs(x) / app.clientWidth));
+      });
+    }
+  },
+  end(axis, dx, dy, vx, vy) {
+    const w = app.clientWidth, h = app.clientHeight;
+    if (axis === 'down') {
+      const under = screens[screenBeforePlayer === 'player' ? 'library' : screenBeforePlayer] || screens.library;
+      const go = dy > h * 0.22 || (vy > 0.5 && dy > 40);
+      glide(screens.player, go ? `translateY(${h}px)` : 'translateY(0)', go ? 220 : 260, () => {
+        screens.player.style.transform = '';
+        under.classList.remove('under');
+        if (go) { closePlayer(); tick(); }
+        else under.hidden = true;
+      });
+      return;
+    }
+    const step = dx < 0 ? 1 : -1;
+    const target = queue[queue.indexOf(nowId) + step];
+    const go = Boolean(target) && (Math.abs(dx) > w * 0.28 || (Math.abs(vx) > 0.45 && Math.abs(dx) > 30));
+    const face = playerFace();
+    if (!go) {
+      face.forEach((el) => { glide(el, 'translateX(0)', 260); el.style.opacity = ''; });
+      if (!target && Math.abs(dx) > w * 0.28) toast(step > 0 ? 'That’s the last song' : 'That’s the first song');
+      return;
+    }
+    // slide this song out, the next one in from the other side
+    face.forEach((el) => { el.style.opacity = '0'; glide(el, `translateX(${step > 0 ? -w * 0.6 : w * 0.6}px)`, 180); });
+    setTimeout(() => {
+      skip(step);
+      tick();
+      face.forEach((el) => {
+        el.style.transition = 'none';
+        el.style.transform = `translateX(${step > 0 ? w * 0.5 : -w * 0.5}px)`;
+        void el.offsetWidth;
+        el.style.opacity = '';
+        glide(el, 'translateX(0)', 280);
+      });
+    }, calmMotion() ? 0 : 180);
+  },
+});
+
+// ===================================================================
 // 13. Start
 // ===================================================================
 async function start() {
@@ -2147,6 +2557,8 @@ async function start() {
   if (splash) splash.hide().catch(() => {});
   setUpInstalling();
   setUpAccount();
+  // Quietly re-listen to songs analysed by an older version of ToyBox (one at a time).
+  setTimeout(() => tracks.forEach((t) => wantFacts(t.id)), 5000);
 }
 
 // Home-screen app: keep a copy for offline use, and in Safari show how to install.
